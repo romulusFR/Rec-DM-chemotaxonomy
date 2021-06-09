@@ -1,0 +1,12 @@
+[TYPECHECK]
+ignored-modules=Levenshtein
+generated-members=Chem.*
+
+[FORMAT]
+max-line-length=120
+
+[MISCELLANEOUS]
+notes=FIXME,
+      XXX,
+      TODO,
+      BUG
