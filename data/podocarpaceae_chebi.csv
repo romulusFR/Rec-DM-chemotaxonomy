@@ -1,0 +1,183 @@
+id,search,chebiId,chebiAsciiName,searchScore,entityStar,levenshtein
+0,β-Acoradiene,CHEBI:172925,beta-acoradiene,8.0,2,0.0
+1,α-Cubebene,CHEBI:10224,alpha-cubebene,7.12,3,0.0
+2,α-Ylangene,CHEBI:10341,alpha-Ylangene,8.08,2,0.0
+3,α-Copaene,CHEBI:10221,alpha-copaene,7.12,3,0.0
+4,γ-Muurolene,CHEBI:64798,gamma-muurolene,8.21,3,0.0
+5,α-Muurolene,CHEBI:64797,alpha-muurolene,7.12,3,0.0
+6,Cubebol,CHEBI:63446,(-)-cubebol,9.92,3,4.0
+7,Cubebol,CHEBI:138045,(-)-10-epi-cubebol,7.16,3,11.0
+8,Cubebol,CHEBI:138041,(+)-4-epi-cubebol,5.83,3,10.0
+9,Cubebol,CHEBI:69077,epicubebol methyl ether,0.15,2,16.0
+10,γ-Cadinene,CHEBI:59960,(+-)-gamma-cadinene,7.65,3,5.0
+11,γ-Cadinene,CHEBI:63203,(-)-gamma-cadinene,7.65,3,4.0
+12,γ-Cadinene,CHEBI:63205,(+)-gamma-cadinene,7.65,3,4.0
+13,δ-Cadinene,CHEBI:15385,(+)-delta-cadinene,8.05,3,4.0
+14,δ-Cadinene,CHEBI:63703,(-)-delta-cadinene,8.05,3,4.0
+15,δ-Cadinene,CHEBI:140564,delta-cadinene,8.05,3,0.0
+16,Elemol,CHEBI:141221,elemol,11.71,3,0.0
+17,Elemol,CHEBI:172934,beta-elemol,5.93,2,5.0
+18,Elemol,CHEBI:10274,alpha-Elemolic acid,0.14,2,13.0
+19,α-Cadinene,CHEBI:80749,alpha-Cadinene,7.43,2,0.0
+20,γ-Eudesmol,CHEBI:62513,gamma-eudesmol,7.91,3,0.0
+21,γ-Eudesmol,CHEBI:62514,10-epi-gamma-eudesmol,6.8,3,7.0
+22,τ-Muurolol,CHEBI:63704,(+)-Tau-muurolol,9.75,3,4.0
+23,τ-Muurolol,CHEBI:132906,(-)-Tau-muurolol,9.75,3,4.0
+24,Cubenol,CHEBI:156224,(-)-cubenol,10.52,3,4.0
+25,Cubenol,CHEBI:61686,(+)-epicubenol,0.18,3,7.0
+26,Cubenol,CHEBI:156227,(-)-epicubenol,0.18,3,7.0
+27,α-Cadinol,CHEBI:132905,alpha-cadinol,7.0,3,0.0
+28,β-Farnesene,CHEBI:39241,beta-farnesene,6.53,3,0.0
+29,β-Farnesene,CHEBI:10418,trans-beta-farnesene,5.62,3,6.0
+30,β-Farnesene,CHEBI:39242,cis-beta-farnesene,5.62,3,4.0
+31,δ-Elemene,CHEBI:132830,delta-elemene,8.39,3,0.0
+32,β-Elemene,CHEBI:62854,beta-elemene,6.83,3,0.0
+33,β-Elemene,CHEBI:62855,(-)-beta-elemene,6.83,3,4.0
+34,Sibirene,CHEBI:49231,sibirene,12.12,3,0.0
+35,Sibirene,CHEBI:49232,"5alpha,10beta-sibirene",0.18,3,14.0
+36,Sibirene,CHEBI:49233,"5beta,10alpha-sibirene",0.18,3,14.0
+37,Sibirene,CHEBI:49234,"5beta,10beta-sibirene",0.18,3,13.0
+38,α-Guaiene,CHEBI:63443,alpha-guaiene,7.0,3,0.0
+39,Aromadendrene,CHEBI:166671,Aromadendrene,11.38,2,0.0
+40,Aromadendrene,CHEBI:166670,Allo-Aromadendrene,5.78,2,5.0
+41,Aromadendrene,CHEBI:167346,"Aromadendrene, dehydro-",5.78,2,10.0
+42,Germacrene D,CHEBI:49044,(-)-germacrene D,6.76,3,4.0
+43,Germacrene D,CHEBI:49045,germacrene D,5.51,3,0.0
+44,Germacrene D,CHEBI:49046,(+)-germacrene D,5.51,3,4.0
+45,Germacrene D,CHEBI:141218,germacrene D-4-ol,3.3,3,5.0
+46,Germacrene D,CHEBI:36743,germacrene,3.24,3,2.0
+47,β-Selinene,CHEBI:10443,(+)-beta-selinene,6.45,3,4.0
+48,β-Selinene,CHEBI:49274,(-)-beta-selinene,6.45,3,4.0
+49,β-Selinene,CHEBI:49276,beta-selinene,6.45,3,0.0
+50,Valencene,CHEBI:61700,(+)-valencene,10.74,3,4.0
+51,Bicyclogermacrene,CHEBI:63709,bicyclogermacrene,12.12,3,0.0
+52,α-Selinene,CHEBI:59961,alpha-selinene,6.52,3,0.0
+53,α-Selinene,CHEBI:62224,(-)-7-epi-alpha-selinene,5.62,3,10.0
+54,α-Selinene,CHEBI:63445,5-epi-alpha-selinene,5.62,3,6.0
+55,Germacrene B,CHEBI:5337,"(1E,4E)-germacrene B",5.93,3,8.0
+56,Germacrene B,CHEBI:49314,germacrene B,5.93,3,0.0
+57,Germacrene B,CHEBI:49315,"(1E,4Z)-germacrene B",5.93,3,8.0
+58,Germacrene B,CHEBI:49655,"(1Z,4Z)-germacrene B",5.93,3,8.0
+59,Germacrene B,CHEBI:49693,"(1Z,4E)-germacrene B",5.93,3,8.0
+60,Spathulenol,CHEBI:132824,spathulenol,11.71,3,0.0
+61,Spathulenol,CHEBI:67836,ent-spathulenol,5.93,2,4.0
+62,Spathulenol,CHEBI:167423,Isospathulenol,0.14,2,3.0
+63,Globulol,CHEBI:167415,(-)-Globulol,10.69,2,4.0
+64,Viridiflorol,CHEBI:156228,viridiflorol,12.12,3,0.0
+65,Eudesmol (isomère ni),CHEBI:10278,alpha-eudesmol,1.01,3,19.0
+66,Eudesmol (isomère ni),CHEBI:10417,beta-eudesmol,1.01,3,18.0
+67,Eudesmol (isomère ni),CHEBI:62513,gamma-eudesmol,1.01,3,19.0
+68,Eudesmol (isomère ni),CHEBI:62514,10-epi-gamma-eudesmol,0.88,3,19.0
+69,Eudesmol (isomère ni),CHEBI:138040,7-epi-alpha-eudesmol,0.88,3,19.0
+70,β-Caryophyllene,CHEBI:10357,(-)-beta-caryophyllene,6.62,3,4.0
+71,β-Caryophyllene,CHEBI:63190,(+)-beta-caryophyllene,6.62,3,4.0
+72,β-Caryophyllene,CHEBI:63191,beta-caryophyllene,6.62,3,0.0
+73,β-Caryophyllene,CHEBI:68667,(E)-2-epi-beta-caryophyllene,4.78,3,10.0
+74,Isocaryophyllene,CHEBI:5993,Isocaryophyllene,12.08,2,0.0
+75,α-Humulene,CHEBI:49311,alpha-humulene,6.56,3,0.0
+76,α-Humulene,CHEBI:5768,"(1E,4E,8E)-alpha-humulene",5.65,3,11.0
+77,α-Humulene,CHEBI:63893,8-hydroxy-alpha-humulene,5.65,3,10.0
+78,Caryophyllene oxide,CHEBI:67818,caryophyllene oxide,6.54,2,0.0
+79,Caryophyllene oxide,CHEBI:10357,(-)-beta-caryophyllene,1.94,3,15.0
+80,Caryophyllene oxide,CHEBI:63190,(+)-beta-caryophyllene,1.94,3,15.0
+81,Caryophyllene oxide,CHEBI:63191,beta-caryophyllene,1.94,3,11.0
+82,Caryophyllene oxide,CHEBI:156179,Caryophyllene epoxide,1.55,2,2.0
+83,Humulene epoxide II,CHEBI:49289,humulene,1.8,3,11.0
+84,Humulene epoxide II,CHEBI:32955,epoxide,1.46,3,12.0
+85,Humulene epoxide II,CHEBI:49290,gamma-humulene,1.15,3,17.0
+86,Humulene epoxide II,CHEBI:49311,alpha-humulene,1.15,3,17.0
+87,Humulene epoxide II,CHEBI:49313,beta-humulene,1.15,3,16.0
+88,α-Pinene,CHEBI:28261,(+)-alpha-pinene,6.65,3,4.0
+89,α-Pinene,CHEBI:28660,(-)-alpha-pinene,6.65,3,4.0
+90,α-Pinene,CHEBI:36740,alpha-pinene,6.65,3,0.0
+91,α-Pinene,CHEBI:29060,alpha-pinene oxide,5.72,3,6.0
+92,Sabinene,CHEBI:50027,sabinene,11.2,3,0.0
+93,Sabinene,CHEBI:50029,(+)-sabinene,9.93,3,4.0
+94,Sabinene,CHEBI:50028,(-)-sabinene,9.73,3,4.0
+95,Sabinene,CHEBI:16377,sabinene hydrate,5.72,3,8.0
+96,Sabinene,CHEBI:85087,cis-sesquisabinene hydrate,0.2,3,18.0
+97,Octen-3-ol,CHEBI:81219,1-Octen-3-ol-3-o-beta-D-xylopyranosyl(1->6)-beta-D-glucopyranoside,0.13,2,56.0
+98,β-Pinene,CHEBI:28359,(-)-beta-pinene,6.57,3,4.0
+99,β-Pinene,CHEBI:50025,beta-pinene,6.57,3,0.0
+100,β-Pinene,CHEBI:50026,(+)-beta-pinene,6.57,3,4.0
+101,Myrcene,CHEBI:17221,beta-myrcene,7.33,3,5.0
+102,Limonene,CHEBI:15384,limonene,10.24,3,0.0
+103,Limonene,CHEBI:35669,"(4R)-limonene 1beta,2beta-epoxide",5.55,3,25.0
+104,Limonene,CHEBI:43812,"(4R)-limonene 1alpha,2alpha-epoxide",5.55,3,27.0
+105,Limonene,CHEBI:15382,(4R)-limonene,5.25,3,5.0
+106,Limonene,CHEBI:15383,(4S)-limonene,5.25,3,5.0
+107,β-Phellandrene,CHEBI:53,(+)-beta-phellandrene,6.57,3,4.0
+108,β-Phellandrene,CHEBI:129,(-)-beta-phellandrene,6.57,3,4.0
+109,β-Phellandrene,CHEBI:48741,beta-phellandrene,6.57,3,0.0
+110,α-Terpineol,CHEBI:168454,alpha-Terpineol formate,7.43,2,8.0
+111,α-Terpineol,CHEBI:171778,alpha-Terpineol butanoate,7.43,2,10.0
+112,α-Terpineol,CHEBI:22469,alpha-terpineol,6.56,3,0.0
+113,α-Terpineol,CHEBI:128,(S)-(-)-alpha-terpineol,5.65,3,8.0
+114,α-Terpineol,CHEBI:300,(R)-(+)-alpha-terpineol,5.65,3,8.0
+115,Carvone,CHEBI:38265,carvone,11.2,3,0.0
+116,Carvone,CHEBI:15399,(+)-carvone,9.93,3,4.0
+117,Carvone,CHEBI:15400,(-)-carvone,9.73,3,4.0
+118,Carvone,CHEBI:154,(+)-dihydrocarvone,0.2,3,11.0
+119,Carvone,CHEBI:155,(-)-isodihydrocarvone,0.2,3,14.0
+120,Abietatriene,CHEBI:86062,abietatriene,12.12,3,0.0
+121,Abietadiene,CHEBI:50072,abietadiene,12.12,3,0.0
+122,Abietadiene,CHEBI:29651,neoabietadiene,0.18,3,3.0
+123,"Sandaracopimara-8(14),15-diene",CHEBI:50061,"ent-sandaracopimara-8(14),15-diene",12.29,3,4.0
+124,Kaurene,CHEBI:167426,Kaurene,11.38,2,0.0
+125,Kaurene,CHEBI:15415,ent-kaurene,5.83,3,4.0
+126,Kaurene,CHEBI:86430,EC 1.14.13.78 (ent-kaurene oxidase) inhibitor,4.43,3,38.0
+127,Kaurene,CHEBI:50783,ent-isokaurene,0.19,3,7.0
+128,Kaurene,CHEBI:63642,2beta-hydroxy-ent-isokaurene,0.19,3,21.0
+129,Sclarene,CHEBI:64281,sclarene,12.12,3,0.0
+130,Manool oxide,CHEBI:76945,manool,3.22,3,6.0
+131,Manool oxide,CHEBI:66025,7alpha-hydroperoxy manool,2.04,3,21.0
+132,Manool oxide,CHEBI:76944,13-epi-manool,1.68,3,13.0
+133,Manool oxide,CHEBI:76948,ent-manool,1.68,3,10.0
+134,Manool oxide,CHEBI:25741,oxide,1.42,3,7.0
+135,Pimaradiene,CHEBI:50062,pimaradiene,12.12,3,0.0
+136,Pimaradiene,CHEBI:78255,3alpha-hydroxy-ent-sandaracopimaradiene,0.18,3,28.0
+137,Pimaradiene,CHEBI:69179,"sandaracopimaradiene-1alpha,9alpha-diol",0.14,2,28.0
+138,Pimaradiene,CHEBI:69238,sandaracopimaradienediol,0.14,2,13.0
+139,β-Cedrene,NOT FOUND,NOT FOUND,0.0,0,0.0
+140,trans-Calamenene,NOT FOUND,NOT FOUND,0.0,0,0.0
+141,"Widdra-2,4(14)-diene",NOT FOUND,NOT FOUND,0.0,0,0.0
+142,β-Alaskene,NOT FOUND,NOT FOUND,0.0,0,0.0
+143,Isolongifolol,NOT FOUND,NOT FOUND,0.0,0,0.0
+144,Xanthorrizol,NOT FOUND,NOT FOUND,0.0,0,0.0
+145,Cadinadiene,NOT FOUND,NOT FOUND,0.0,0,0.0
+146,γ-Amorphene,NOT FOUND,NOT FOUND,0.0,0,0.0
+147,"1,10-di-épi-Cubenol",NOT FOUND,NOT FOUND,0.0,0,0.0
+148,1-epi-Cubenol,NOT FOUND,NOT FOUND,0.0,0,0.0
+149,"Caryophylla-4(1),8(13)-dien-5-ol",NOT FOUND,NOT FOUND,0.0,0,0.0
+150,14-hydroxy-9-epi (E)-caryophyllene,NOT FOUND,NOT FOUND,0.0,0,0.0
+151,14-hydroxy-(Z)-caryophyllène,NOT FOUND,NOT FOUND,0.0,0,0.0
+152,α-Muurolol,NOT FOUND,NOT FOUND,0.0,0,0.0
+153,Isoledene,NOT FOUND,NOT FOUND,0.0,0,0.0
+154,cis-β-Guaiene,NOT FOUND,NOT FOUND,0.0,0,0.0
+155,γ-Patchoulene,NOT FOUND,NOT FOUND,0.0,0,0.0
+156,Maaliol,NOT FOUND,NOT FOUND,0.0,0,0.0
+157,Rosifoliol,NOT FOUND,NOT FOUND,0.0,0,0.0
+158,"Selina-3,11-diene-6-α-ol",NOT FOUND,NOT FOUND,0.0,0,0.0
+159,Selin-11-en-4-α-ol,NOT FOUND,NOT FOUND,0.0,0,0.0
+160,γ-Costol,NOT FOUND,NOT FOUND,0.0,0,0.0
+161,β-Costol,NOT FOUND,NOT FOUND,0.0,0,0.0
+162,α-Costol,NOT FOUND,NOT FOUND,0.0,0,0.0
+163,9-epi-(E)-Caryophyllene,NOT FOUND,NOT FOUND,0.0,0,0.0
+164,Cubeban-11-ol,NOT FOUND,NOT FOUND,0.0,0,0.0
+165,ρ-Cymene,NOT FOUND,NOT FOUND,0.0,0,0.0
+166,2-Ethyl-1-hexanol,NOT FOUND,NOT FOUND,0.0,0,0.0
+167,Terpinen-4-ol,NOT FOUND,NOT FOUND,0.0,0,0.0
+168,trans-carvéol,NOT FOUND,NOT FOUND,0.0,0,0.0
+169,Sempervirol,NOT FOUND,NOT FOUND,0.0,0,0.0
+170,trans-Ferruginol,NOT FOUND,NOT FOUND,0.0,0,0.0
+171,cis-Ferruginol,NOT FOUND,NOT FOUND,0.0,0,0.0
+172,trans-Totarol,NOT FOUND,NOT FOUND,0.0,0,0.0
+173,"Isopimara-9(11),15-diene",NOT FOUND,NOT FOUND,0.0,0,0.0
+174,13-Isopimaradiene,NOT FOUND,NOT FOUND,0.0,0,0.0
+175,Sandaracopimarinal,NOT FOUND,NOT FOUND,0.0,0,0.0
+176,Sandaracopimarinol,NOT FOUND,NOT FOUND,0.0,0,0.0
+177,Dolabadriene <13-epi>,NOT FOUND,NOT FOUND,0.0,0,0.0
+178,Phyllocladene,NOT FOUND,NOT FOUND,0.0,0,0.0
+179,Phyllocladanol,NOT FOUND,NOT FOUND,0.0,0,0.0
+180,Rimuene,NOT FOUND,NOT FOUND,0.0,0,0.0
+181,"Rosa-5,15-diene",NOT FOUND,NOT FOUND,0.0,0,0.0
