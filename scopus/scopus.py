@@ -18,7 +18,7 @@ logger.setLevel(logging.INFO)
 
 
 MAX_REQ_BY_SEC = 9
-CHEMISTRY = ["alkaloid", "polyphenol"]
+CHEMISTRY = ["alkaloid", "polyphenol", "coumarin"]
 ACTIVITIES = ["antiinflammatory", "anticoagulant", "cancer"]
 
 
