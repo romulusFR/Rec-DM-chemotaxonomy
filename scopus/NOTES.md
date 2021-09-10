@@ -79,3 +79,120 @@ For _Scopus Search_, see <https://dev.elsevier.com/api_key_settings.html>
 
 - Weekly Quota : 20.000
 - Requests/second : 9
+
+## Examples
+
+### `results.json`
+
+```json
+{
+  "search-results": {
+    "opensearch:totalResults": "7794",
+    "opensearch:startIndex": "0",
+    "opensearch:itemsPerPage": "1",
+    "opensearch:Query": { "@role": "request", "@searchTerms": "KEY(alkaloid) AND KEY(cancer)", "@startPage": "0" },
+    "link": [
+      {
+        "@_fa": "true",
+        "@ref": "self",
+        "@href": "https://api.elsevier.com/content/search/scopus?start=0&count=1&query=KEY%28alkaloid%29+AND+KEY%28cancer%29",
+        "@type": "application/json"
+      },
+      {
+        "@_fa": "true",
+        "@ref": "first",
+        "@href": "https://api.elsevier.com/content/search/scopus?start=0&count=1&query=KEY%28alkaloid%29+AND+KEY%28cancer%29",
+        "@type": "application/json"
+      },
+      {
+        "@_fa": "true",
+        "@ref": "next",
+        "@href": "https://api.elsevier.com/content/search/scopus?start=1&count=1&query=KEY%28alkaloid%29+AND+KEY%28cancer%29",
+        "@type": "application/json"
+      },
+      {
+        "@_fa": "true",
+        "@ref": "last",
+        "@href": "https://api.elsevier.com/content/search/scopus?start=4999&count=1&query=KEY%28alkaloid%29+AND+KEY%28cancer%29",
+        "@type": "application/json"
+      }
+    ],
+    "entry": [
+      {
+        "@_fa": "true",
+        "link": [
+          {
+            "@_fa": "true",
+            "@ref": "self",
+            "@href": "https://api.elsevier.com/content/abstract/scopus_id/85112205136"
+          },
+          {
+            "@_fa": "true",
+            "@ref": "author-affiliation",
+            "@href": "https://api.elsevier.com/content/abstract/scopus_id/85112205136?field=author,affiliation"
+          },
+          {
+            "@_fa": "true",
+            "@ref": "scopus",
+            "@href": "https://www.scopus.com/inward/record.uri?partnerID=HzOxMe3b&scp=85112205136&origin=inward"
+          },
+          {
+            "@_fa": "true",
+            "@ref": "scopus-citedby",
+            "@href": "https://www.scopus.com/inward/citedby.uri?partnerID=HzOxMe3b&scp=85112205136&origin=inward"
+          },
+          {
+            "@_fa": "true",
+            "@ref": "full-text",
+            "@href": "https://api.elsevier.com/content/article/eid/1-s2.0-S0304419X21001049"
+          }
+        ],
+        "prism:url": "https://api.elsevier.com/content/abstract/scopus_id/85112205136",
+        "dc:identifier": "SCOPUS_ID:85112205136",
+        "eid": "2-s2.0-85112205136",
+        "dc:title": "βIII-tubulin overexpression in cancer: Causes, consequences, and potential therapies",
+        "dc:creator": "Kanakkanthara A.",
+        "prism:publicationName": "Biochimica et Biophysica Acta - Reviews on Cancer",
+        "prism:issn": "0304419X",
+        "prism:eIssn": "18792561",
+        "prism:volume": "1876",
+        "prism:issueIdentifier": "2",
+        "prism:pageRange": null,
+        "prism:coverDate": "2021-12-01",
+        "prism:coverDisplayDate": "December 2021",
+        "prism:doi": "10.1016/j.bbcan.2021.188607",
+        "pii": "S0304419X21001049",
+        "citedby-count": "0",
+        "affiliation": [
+          {
+            "@_fa": "true",
+            "affilname": "Mayo Clinic",
+            "affiliation-city": "Rochester",
+            "affiliation-country": "United States"
+          }
+        ],
+        "prism:aggregationType": "Journal",
+        "subtype": "re",
+        "subtypeDescription": "Review",
+        "article-number": "188607",
+        "source-id": "80280",
+        "openaccess": "0",
+        "openaccessFlag": false
+      }
+    ]
+  }
+}
+```
+
+### `search.json`
+
+```json
+{
+    "title": "Articulation Disorders",
+    "filters": {
+      "openAccess": true
+    },
+    "loadedAfter": "2018-06-01T00:00:00Z"
+  }
+```
+
