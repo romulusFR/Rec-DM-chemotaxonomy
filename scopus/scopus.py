@@ -26,20 +26,34 @@ logger.setLevel(logging.DEBUG)
 # https://docs.aiohttp.org/en/stable/client_advanced.html
 
 
-MAX_REQ_BY_SEC = 5
+# SAMPLES / TESTS
 CHEMISTRY = ["alkaloid", "polyphenol", "coumarin"]
 ACTIVITIES = ["antiinflammatory", "anticoagulant", "cancer"]
-
+RESULTS = {"acridine": {"anticancer": "2790"}, "pyridine": {"toxicant": "1904"}, "tetracycline": {"repulsive": "4598"}}
 QUERIES = list(product(CHEMISTRY, ACTIVITIES))
 NB_MAX_TEST_QUERIES = 5
+
+# DATASETS
+COMPOUNDS = Path("data") / "compounds.csv"
+PHARMACOLOGY = Path("data") / "pharmacology.csv"
+BASE_CLASS = "*"
+
+# OUTPUT
+OUTPUT_DIR = Path("results")
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 CSV_PARAMS = {"delimiter": ";", "quotechar": '"'}
 
+# API Scopus
+MAX_REQ_BY_SEC = 50
 API_KEY = {"X-ELS-APIKey": "7047b3a8cf46d922d5d5ca71ff531b7d"}
-search_and = lambda s1, s2: {
-    "query": f'( KEY ( {s1} ) AND KEY ( {s2} ) ) AND ( DOCTYPE( "ar" ) )',
-    "count": 1,
-}
-x_rate_limit_headers = ["X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"]
+X_RATE_HEADERS = ["X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"]
+
+
+def build_search_query(keywords1, keywords2):
+    return {
+        "query": f'( KEY ( {keywords1} ) AND KEY ( {keywords2} ) ) AND ( DOCTYPE( "ar" ) )',
+        "count": 1,
+    }
 
 
 async def query_mockup(keyword1, keyword2, /, delay=1):
@@ -63,7 +77,7 @@ async def query_httpbin(keyword1, keyword2, /, delay=1):
     logger.debug("run_async_query_test(%s, %s): launching at %s", keyword1, keyword2, start_time)
     async with aiohttp.ClientSession() as session:
         try:
-            async with session.get(url, params=search_and(keyword1, keyword2), data=data) as resp:
+            async with session.get(url, params=build_search_query(keyword1, keyword2), data=data) as resp:
                 json = await resp.json()
                 args = json["args"]["query"]
                 results_nb = json["form"]["answer"]
@@ -86,7 +100,7 @@ async def query_scopus(keyword1, keyword2, /, delay=1):
     logger.debug("run_async_query(%s, %s) @%s", keyword1, keyword2, start_time)
     async with aiohttp.ClientSession() as session:
         try:
-            async with session.get(scopus_url, params=search_and(keyword1, keyword2), headers=API_KEY) as resp:
+            async with session.get(scopus_url, params=build_search_query(keyword1, keyword2), headers=API_KEY) as resp:
                 logger.debug("X-RateLimit-Remaining=%s", resp.headers.get("X-RateLimit-Remaining", None))
                 json = await resp.json()
                 results_nb = int(json["search-results"]["opensearch:totalResults"], 10)
@@ -116,8 +130,8 @@ async def main(pairs, mode):
 
     res = await asyncio.gather(*coros)
     res_dict = defaultdict(dict)
-    for (chemo, pharma, nb, _) in res:
-        res_dict[chemo][pharma] = nb
+    for (chemo, pharma, nb_results, _) in res:
+        res_dict[chemo][pharma] = nb_results
     return res_dict
     # return {(chemo, pharma): (nb, duration) for (chemo, pharma, nb, duration) in res}
 
@@ -135,9 +149,13 @@ def get_classes(filename):
         reader = csv.reader(csvfile, **CSV_PARAMS)
         for (parent, child) in reader:
             classes[clean_word(child)] = clean_word(parent)
+
+    for value in set(classes.values()):
+        classes[value] = BASE_CLASS
     return classes
 
 
+# NOTE : rows et cols sont surtout pour l'ordreet les cases vides si besoin
 def write_results(res_dict: dict[Tuple[str, str], Tuple[int, float]], rows, cols, filename):
     """Store result dict"""
     logger.debug("write_results(%i, %s)", len(results), filename)
@@ -150,28 +168,24 @@ def write_results(res_dict: dict[Tuple[str, str], Tuple[int, float]], rows, cols
     logger.debug("%s written", filename)
 
 
-RESULTS = {"acridine": {"anticancer": "2790"}, "pyridine": {"toxicant": "1904"}, "tetracycline": {"repulsive": "4598"}}
-COMPOUNDS = Path("data") / "compounds.csv"
-PHARMACOLOGY = Path("data") / "pharmacology.csv"
-
-
 # %%
 
 if __name__ == "__main__":
     compounds = get_classes(COMPOUNDS)
     pharmaco = get_classes(PHARMACOLOGY)
-    compounds_classes = {v for v in compounds.values()}
-    pharmaco_classes = {v for v in pharmaco.values()}
-    queries = list(product(compounds_classes, pharmaco_classes))
+    # TODO ici, trier différement : classes puis values
+    compounds_keywords = {v for v in compounds.values() if v != BASE_CLASS}
+    pharmaco_keywords = {v for v in pharmaco.values() if v != BASE_CLASS}
+    queries = list(product(compounds_keywords, pharmaco_keywords))
 
     main_start_time = datetime.datetime.now()
     logger.info("START")
-    results = asyncio.run(main(queries, mode="mockup"))
+    results = asyncio.run(main(queries, mode="mock"))
     total_time = datetime.datetime.now() - main_start_time
     logger.info("DONE in %fs", total_time.seconds + total_time.microseconds / 10 ** 6)
-    Path("results").mkdir(parents=True, exist_ok=True)
-    output_filename = f"results/activity_{datetime.datetime.now()}.csv"
-    write_results(results, compounds_classes, pharmaco_classes, output_filename)
+
+    output_filename = OUTPUT_DIR / f"activity_{datetime.datetime.now()}.csv"
+    write_results(results, compounds_keywords, pharmaco_keywords, output_filename)
     logger.info("WRITTEN in %s", output_filename)
 
 
