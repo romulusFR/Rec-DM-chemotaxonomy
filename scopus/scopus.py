@@ -158,7 +158,7 @@ if __name__ == "__main__":
     main_start_time = datetime.datetime.now()
     logger.info("START")
     # results = asyncio.run(main(sample(queries, 1), debug=False))
-    results = asyncio.run(main(queries), debug=False)
+    results = asyncio.run(main(queries, debug=False))
     total_time = datetime.datetime.now() - main_start_time
     logger.info("DONE in %fs", total_time.seconds + total_time.microseconds / 10 ** 6)
 
@@ -170,3 +170,4 @@ if __name__ == "__main__":
 
 # if __name__ == "__main__":
 #     asyncio.run(run_async_query("phenolic compound", "chronic disease", 0))
+# 38 articles et 69 au total

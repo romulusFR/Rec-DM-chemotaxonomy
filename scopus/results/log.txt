@@ -1,0 +1,172 @@
+DEBUG:scopus_api:get_classes(compounds.csv)
+DEBUG:scopus_api:get_classes(pharmacology.csv)
+INFO:scopus_api:START
+INFO:scopus_api:main: 55 jobs created
+DEBUG:scopus_api:run_async_query(phenolic compound, inflammation) @2021-09-11 00:05:11.420537
+DEBUG:scopus_api:run_async_query(phenolic compound, infection) @2021-09-11 00:05:11.620852
+DEBUG:scopus_api:run_async_query(phenolic compound, antioxidant) @2021-09-11 00:05:11.820407
+DEBUG:scopus_api:run_async_query(phenolic compound, allelopathy) @2021-09-11 00:05:12.020994
+DEBUG:scopus_api:run_async_query(phenolic compound, diuretic) @2021-09-11 00:05:12.220585
+DEBUG:scopus_api:run_async_query(phenolic compound, antipyretic) @2021-09-11 00:05:12.420785
+DEBUG:scopus_api:run_async_query(phenolic compound, chronic disease) @2021-09-11 00:05:12.620436
+DEBUG:scopus_api:run_async_query(phenolic compound, toxicity and intoxication) @2021-09-11 00:05:12.821422
+DEBUG:scopus_api:X-RateLimit-Remaining=19966
+DEBUG:scopus_api:run_async_query(phenolic compound, inflammation) = 152 @2021-09-11 00:05:12.838051
+DEBUG:scopus_api:run_async_query(phenolic compound, neoplasm) @2021-09-11 00:05:13.021235
+DEBUG:scopus_api:X-RateLimit-Remaining=19966
+DEBUG:scopus_api:run_async_query(phenolic compound, infection) = 93 @2021-09-11 00:05:13.178052
+DEBUG:scopus_api:X-RateLimit-Remaining=19965
+DEBUG:scopus_api:run_async_query(phenolic compound, antioxidant) = 9054 @2021-09-11 00:05:13.190303
+DEBUG:scopus_api:run_async_query(phenolic compound, stimulant) @2021-09-11 00:05:13.221294
+DEBUG:scopus_api:X-RateLimit-Remaining=19965
+DEBUG:scopus_api:run_async_query(phenolic compound, allelopathy) = 185 @2021-09-11 00:05:13.347931
+DEBUG:scopus_api:run_async_query(phenolic compound, allergy) @2021-09-11 00:05:13.421340
+DEBUG:scopus_api:run_async_query(polyketide, inflammation) @2021-09-11 00:05:13.621501
+DEBUG:scopus_api:run_async_query(polyketide, infection) @2021-09-11 00:05:13.821220
+DEBUG:scopus_api:X-RateLimit-Remaining=19964
+DEBUG:scopus_api:run_async_query(phenolic compound, diuretic) = 7 @2021-09-11 00:05:13.900512
+DEBUG:scopus_api:run_async_query(polyketide, antioxidant) @2021-09-11 00:05:14.020777
+DEBUG:scopus_api:run_async_query(polyketide, allelopathy) @2021-09-11 00:05:14.221290
+DEBUG:scopus_api:run_async_query(polyketide, diuretic) @2021-09-11 00:05:14.421384
+DEBUG:scopus_api:X-RateLimit-Remaining=19964
+DEBUG:scopus_api:run_async_query(phenolic compound, antipyretic) = 3 @2021-09-11 00:05:14.435308
+DEBUG:scopus_api:X-RateLimit-Remaining=19964
+DEBUG:scopus_api:run_async_query(phenolic compound, chronic disease) = 38 @2021-09-11 00:05:14.586368
+DEBUG:scopus_api:run_async_query(polyketide, antipyretic) @2021-09-11 00:05:14.621493
+DEBUG:scopus_api:X-RateLimit-Remaining=19963
+DEBUG:scopus_api:run_async_query(phenolic compound, toxicity and intoxication) = 9 @2021-09-11 00:05:14.691617
+DEBUG:scopus_api:X-RateLimit-Remaining=19963
+DEBUG:scopus_api:run_async_query(phenolic compound, neoplasm) = 131 @2021-09-11 00:05:14.692671
+DEBUG:scopus_api:run_async_query(polyketide, chronic disease) @2021-09-11 00:05:14.821526
+DEBUG:scopus_api:X-RateLimit-Remaining=19963
+DEBUG:scopus_api:run_async_query(phenolic compound, stimulant) = 2 @2021-09-11 00:05:14.895259
+DEBUG:scopus_api:X-RateLimit-Remaining=19963
+DEBUG:scopus_api:run_async_query(phenolic compound, allergy) = 10 @2021-09-11 00:05:14.896827
+DEBUG:scopus_api:run_async_query(polyketide, toxicity and intoxication) @2021-09-11 00:05:15.020715
+DEBUG:scopus_api:X-RateLimit-Remaining=19962
+DEBUG:scopus_api:run_async_query(polyketide, inflammation) = 21 @2021-09-11 00:05:15.029927
+DEBUG:scopus_api:run_async_query(polyketide, neoplasm) @2021-09-11 00:05:15.220568
+DEBUG:scopus_api:X-RateLimit-Remaining=19962
+DEBUG:scopus_api:run_async_query(polyketide, infection) = 109 @2021-09-11 00:05:15.336113
+DEBUG:scopus_api:run_async_query(polyketide, stimulant) @2021-09-11 00:05:15.421497
+DEBUG:scopus_api:X-RateLimit-Remaining=19961
+DEBUG:scopus_api:run_async_query(polyketide, diuretic) = 0 @2021-09-11 00:05:15.533270
+DEBUG:scopus_api:run_async_query(polyketide, allergy) @2021-09-11 00:05:15.622170
+DEBUG:scopus_api:X-RateLimit-Remaining=19960
+DEBUG:scopus_api:run_async_query(polyketide, antioxidant) = 79 @2021-09-11 00:05:15.638108
+DEBUG:scopus_api:run_async_query(heteroside, inflammation) @2021-09-11 00:05:15.821131
+DEBUG:scopus_api:run_async_query(heteroside, infection) @2021-09-11 00:05:16.021095
+DEBUG:scopus_api:X-RateLimit-Remaining=19959
+DEBUG:scopus_api:run_async_query(polyketide, antipyretic) = 0 @2021-09-11 00:05:16.130988
+DEBUG:scopus_api:X-RateLimit-Remaining=19961
+DEBUG:scopus_api:run_async_query(polyketide, toxicity and intoxication) = 1 @2021-09-11 00:05:16.133195
+DEBUG:scopus_api:run_async_query(heteroside, antioxidant) @2021-09-11 00:05:16.220568
+DEBUG:scopus_api:X-RateLimit-Remaining=19959
+DEBUG:scopus_api:run_async_query(polyketide, chronic disease) = 5 @2021-09-11 00:05:16.320006
+DEBUG:scopus_api:X-RateLimit-Remaining=19958
+DEBUG:scopus_api:run_async_query(polyketide, allergy) = 2 @2021-09-11 00:05:16.380006
+DEBUG:scopus_api:run_async_query(heteroside, allelopathy) @2021-09-11 00:05:16.421548
+DEBUG:scopus_api:X-RateLimit-Remaining=19960
+DEBUG:scopus_api:run_async_query(polyketide, allelopathy) = 5 @2021-09-11 00:05:16.524941
+DEBUG:scopus_api:X-RateLimit-Remaining=19960
+DEBUG:scopus_api:run_async_query(heteroside, inflammation) = 0 @2021-09-11 00:05:16.536854
+DEBUG:scopus_api:X-RateLimit-Remaining=19958
+DEBUG:scopus_api:run_async_query(polyketide, neoplasm) = 93 @2021-09-11 00:05:16.617716
+DEBUG:scopus_api:run_async_query(heteroside, diuretic) @2021-09-11 00:05:16.620682
+DEBUG:scopus_api:X-RateLimit-Remaining=19959
+DEBUG:scopus_api:run_async_query(polyketide, stimulant) = 0 @2021-09-11 00:05:16.645459
+DEBUG:scopus_api:run_async_query(heteroside, antipyretic) @2021-09-11 00:05:16.821127
+DEBUG:scopus_api:X-RateLimit-Remaining=19957
+DEBUG:scopus_api:run_async_query(heteroside, antioxidant) = 5 @2021-09-11 00:05:16.867275
+DEBUG:scopus_api:X-RateLimit-Remaining=19959
+DEBUG:scopus_api:run_async_query(heteroside, infection) = 1 @2021-09-11 00:05:16.930238
+DEBUG:scopus_api:run_async_query(heteroside, chronic disease) @2021-09-11 00:05:17.022593
+DEBUG:scopus_api:run_async_query(heteroside, toxicity and intoxication) @2021-09-11 00:05:17.221490
+DEBUG:scopus_api:run_async_query(heteroside, neoplasm) @2021-09-11 00:05:17.420686
+DEBUG:scopus_api:X-RateLimit-Remaining=19958
+DEBUG:scopus_api:run_async_query(heteroside, chronic disease) = 0 @2021-09-11 00:05:17.506322
+DEBUG:scopus_api:run_async_query(heteroside, stimulant) @2021-09-11 00:05:17.620920
+DEBUG:scopus_api:X-RateLimit-Remaining=19957
+DEBUG:scopus_api:run_async_query(heteroside, allelopathy) = 0 @2021-09-11 00:05:17.744154
+DEBUG:scopus_api:run_async_query(heteroside, allergy) @2021-09-11 00:05:17.820868
+DEBUG:scopus_api:X-RateLimit-Remaining=19957
+DEBUG:scopus_api:run_async_query(heteroside, diuretic) = 0 @2021-09-11 00:05:17.832843
+DEBUG:scopus_api:run_async_query(terpenoid/terpene, inflammation) @2021-09-11 00:05:18.021761
+DEBUG:scopus_api:X-RateLimit-Remaining=19956
+DEBUG:scopus_api:run_async_query(heteroside, neoplasm) = 0 @2021-09-11 00:05:18.055438
+DEBUG:scopus_api:X-RateLimit-Remaining=19956
+DEBUG:scopus_api:run_async_query(heteroside, antipyretic) = 0 @2021-09-11 00:05:18.196419
+DEBUG:scopus_api:run_async_query(terpenoid/terpene, infection) @2021-09-11 00:05:18.221690
+DEBUG:scopus_api:X-RateLimit-Remaining=19955
+DEBUG:scopus_api:run_async_query(heteroside, stimulant) = 0 @2021-09-11 00:05:18.247175
+DEBUG:scopus_api:run_async_query(terpenoid/terpene, antioxidant) @2021-09-11 00:05:18.421300
+DEBUG:scopus_api:run_async_query(terpenoid/terpene, allelopathy) @2021-09-11 00:05:18.621560
+DEBUG:scopus_api:X-RateLimit-Remaining=19954
+DEBUG:scopus_api:run_async_query(heteroside, toxicity and intoxication) = 1 @2021-09-11 00:05:18.693901
+DEBUG:scopus_api:run_async_query(terpenoid/terpene, diuretic) @2021-09-11 00:05:18.821106
+DEBUG:scopus_api:run_async_query(terpenoid/terpene, antipyretic) @2021-09-11 00:05:19.021560
+DEBUG:scopus_api:X-RateLimit-Remaining=19953
+DEBUG:scopus_api:run_async_query(heteroside, allergy) = 0 @2021-09-11 00:05:19.045462
+DEBUG:scopus_api:run_async_query(terpenoid/terpene, chronic disease) @2021-09-11 00:05:19.221120
+DEBUG:scopus_api:run_async_query(terpenoid/terpene, toxicity and intoxication) @2021-09-11 00:05:19.421720
+DEBUG:scopus_api:X-RateLimit-Remaining=19952
+DEBUG:scopus_api:run_async_query(terpenoid/terpene, inflammation) = 27 @2021-09-11 00:05:19.464134
+DEBUG:scopus_api:run_async_query(terpenoid/terpene, neoplasm) @2021-09-11 00:05:19.621965
+DEBUG:scopus_api:X-RateLimit-Remaining=19952
+DEBUG:scopus_api:run_async_query(terpenoid/terpene, infection) = 28 @2021-09-11 00:05:19.637075
+DEBUG:scopus_api:run_async_query(terpenoid/terpene, stimulant) @2021-09-11 00:05:19.821462
+DEBUG:scopus_api:X-RateLimit-Remaining=19951
+DEBUG:scopus_api:run_async_query(terpenoid/terpene, antioxidant) = 132 @2021-09-11 00:05:20.021898
+DEBUG:scopus_api:run_async_query(terpenoid/terpene, allergy) @2021-09-11 00:05:20.022428
+DEBUG:scopus_api:X-RateLimit-Remaining=19951
+DEBUG:scopus_api:run_async_query(terpenoid/terpene, allelopathy) = 13 @2021-09-11 00:05:20.176149
+DEBUG:scopus_api:run_async_query(alkaloid, inflammation) @2021-09-11 00:05:20.221938
+DEBUG:scopus_api:run_async_query(alkaloid, infection) @2021-09-11 00:05:20.421413
+DEBUG:scopus_api:X-RateLimit-Remaining=19950
+DEBUG:scopus_api:run_async_query(terpenoid/terpene, antipyretic) = 6 @2021-09-11 00:05:20.454232
+DEBUG:scopus_api:X-RateLimit-Remaining=19951
+DEBUG:scopus_api:run_async_query(terpenoid/terpene, diuretic) = 2 @2021-09-11 00:05:20.521057
+DEBUG:scopus_api:X-RateLimit-Remaining=19951
+DEBUG:scopus_api:run_async_query(terpenoid/terpene, neoplasm) = 52 @2021-09-11 00:05:20.555841
+DEBUG:scopus_api:run_async_query(alkaloid, antioxidant) @2021-09-11 00:05:20.621297
+DEBUG:scopus_api:X-RateLimit-Remaining=19950
+DEBUG:scopus_api:run_async_query(terpenoid/terpene, toxicity and intoxication) = 0 @2021-09-11 00:05:20.804058
+DEBUG:scopus_api:run_async_query(alkaloid, allelopathy) @2021-09-11 00:05:20.821231
+DEBUG:scopus_api:X-RateLimit-Remaining=19950
+DEBUG:scopus_api:run_async_query(terpenoid/terpene, chronic disease) = 2 @2021-09-11 00:05:20.880224
+DEBUG:scopus_api:run_async_query(alkaloid, diuretic) @2021-09-11 00:05:21.022974
+DEBUG:scopus_api:X-RateLimit-Remaining=19949
+DEBUG:scopus_api:run_async_query(terpenoid/terpene, stimulant) = 0 @2021-09-11 00:05:21.150834
+DEBUG:scopus_api:X-RateLimit-Remaining=19950
+DEBUG:scopus_api:run_async_query(alkaloid, inflammation) = 1154 @2021-09-11 00:05:21.201760
+DEBUG:scopus_api:run_async_query(alkaloid, antipyretic) @2021-09-11 00:05:21.221681
+DEBUG:scopus_api:run_async_query(alkaloid, chronic disease) @2021-09-11 00:05:21.421272
+DEBUG:scopus_api:run_async_query(alkaloid, toxicity and intoxication) @2021-09-11 00:05:21.621718
+DEBUG:scopus_api:run_async_query(alkaloid, neoplasm) @2021-09-11 00:05:21.821065
+DEBUG:scopus_api:run_async_query(alkaloid, stimulant) @2021-09-11 00:05:22.021605
+DEBUG:scopus_api:X-RateLimit-Remaining=19949
+DEBUG:scopus_api:run_async_query(alkaloid, diuretic) = 393 @2021-09-11 00:05:22.045220
+DEBUG:scopus_api:X-RateLimit-Remaining=19949
+DEBUG:scopus_api:run_async_query(alkaloid, antipyretic) = 192 @2021-09-11 00:05:22.121945
+DEBUG:scopus_api:run_async_query(alkaloid, allergy) @2021-09-11 00:05:22.222432
+DEBUG:scopus_api:X-RateLimit-Remaining=19949
+DEBUG:scopus_api:run_async_query(alkaloid, allelopathy) = 51 @2021-09-11 00:05:22.249444
+DEBUG:scopus_api:X-RateLimit-Remaining=19949
+DEBUG:scopus_api:run_async_query(terpenoid/terpene, allergy) = 2 @2021-09-11 00:05:22.258218
+DEBUG:scopus_api:X-RateLimit-Remaining=19949
+DEBUG:scopus_api:run_async_query(alkaloid, chronic disease) = 397 @2021-09-11 00:05:22.306631
+DEBUG:scopus_api:X-RateLimit-Remaining=19949
+DEBUG:scopus_api:run_async_query(alkaloid, infection) = 947 @2021-09-11 00:05:22.396544
+DEBUG:scopus_api:X-RateLimit-Remaining=19949
+DEBUG:scopus_api:run_async_query(alkaloid, antioxidant) = 3516 @2021-09-11 00:05:22.402376
+DEBUG:scopus_api:X-RateLimit-Remaining=19948
+DEBUG:scopus_api:run_async_query(alkaloid, neoplasm) = 3455 @2021-09-11 00:05:22.527779
+DEBUG:scopus_api:X-RateLimit-Remaining=19948
+DEBUG:scopus_api:run_async_query(alkaloid, stimulant) = 345 @2021-09-11 00:05:22.712970
+DEBUG:scopus_api:X-RateLimit-Remaining=19947
+DEBUG:scopus_api:run_async_query(alkaloid, allergy) = 111 @2021-09-11 00:05:22.891123
+DEBUG:scopus_api:X-RateLimit-Remaining=19947
+DEBUG:scopus_api:run_async_query(alkaloid, toxicity and intoxication) = 538 @2021-09-11 00:05:22.946832
+INFO:scopus_api:DONE in 11.530796s
+DEBUG:scopus_api:write_results(5, results/activity_2021-09-11 00:05:22.950455.csv)
+DEBUG:scopus_api:results/activity_2021-09-11 00:05:22.950455.csv written
