@@ -3,10 +3,11 @@
 # %%
 
 import logging
+import datetime
 import asyncio
 from itertools import product
 import aiohttp
-from random import randint
+from random import randint, sample
 
 logging.basicConfig()
 logger = logging.getLogger("scopus_api")
@@ -18,7 +19,7 @@ logger.setLevel(logging.DEBUG)
 # https://docs.aiohttp.org/en/stable/client_advanced.html
 
 
-MAX_REQ_BY_SEC = 9
+MAX_REQ_BY_SEC = 5
 CHEMISTRY = ["alkaloid", "polyphenol", "coumarin"]
 ACTIVITIES = ["antiinflammatory", "anticoagulant", "cancer"]
 
@@ -31,29 +32,33 @@ x_rate_limit_headers = ["X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLim
 async def run_async_query_test(keyword1, keyword2):
     """launcher demo"""
     async with aiohttp.ClientSession() as session:
-        url= "http://httpbin.org/anything"
-        data = {"answer" : randint(1, 10000)}
+        url = "http://httpbin.org/anything"
+        data = {"answer": randint(1, 10000)}
+        start_time = datetime.datetime.now()
         async with session.get(url, params=search_and(keyword1, keyword2), data=data) as resp:
             json = await resp.json()
             args = json["args"]["query"]
             results_nb = json["form"]["answer"]
-            msg = f"(TEST) query={args}: {results_nb}"
+            msg = f"run_async_query_test: query={args} results_nb={results_nb}"
             logger.info(msg)
-            return int(results_nb)
+            elapsed = (datetime.datetime.now() - start_time)
+            return (keyword1, keyword2, int(results_nb), elapsed.seconds + elapsed.microseconds/10**6) 
 
 
 async def run_async_query(keyword1, keyword2):
     """launcher"""
     async with aiohttp.ClientSession() as session:
-        #scopus_url = "https://api.elsevier.com/content/search/scopus"
-        scopus_url= "http://httpbin.org/anything"
+        scopus_url = "https://api.elsevier.com/content/search/scopus"
+
+        start_time = datetime.datetime.now()
         async with session.get(scopus_url, params=search_and(keyword1, keyword2), headers=API_KEY) as resp:
             logger.debug("X-RateLimit-Remaining=%s", resp.headers.get("X-RateLimit-Remaining", None))
             json = await resp.json()
             results_nb = json["search-results"]["opensearch:totalResults"]
             msg = f"{keyword1}.{keyword2}={results_nb}"
             logger.info(msg)
-            return int(results_nb)
+            elapsed = (datetime.datetime.now() - start_time)
+            return (keyword1, keyword2, int(results_nb), elapsed.seconds + elapsed.microseconds/10**6) 
 
 
 async def loop_wrap(queries):
@@ -63,19 +68,40 @@ async def loop_wrap(queries):
         # nb_results = await run_async_query(chemo, pharma)
         nb_results = await run_async_query_test(chemo, pharma)
         logger.info("Scopus has %i results for %s AND %s", nb_results, chemo, pharma)
-        # yield (chemo, pharma, nb_results)
+        yield (chemo, pharma, nb_results)
+
+
+
+
+async def main(queries):
+    """Create tasks sequentially with throttling"""
+    coros = []
+    for (chemo, pharma) in queries:
+        coros.append(run_async_query_test(chemo, pharma))
         await asyncio.sleep(1 / MAX_REQ_BY_SEC)
 
+    for coro in asyncio.as_completed(coros):
+        result = await coro
+        logger.info(result)
+    # t = await run_async_query_test("foo", "bar")
+    # logger.info(t)
+    # return t
 
-QUERIES = list(product(CHEMISTRY[:2], ACTIVITIES[:1]))
+    # # loop = asyncio.get_event_loop()
+    # # loop.run_until_complete( asyncio.gather(loop_wrap(QUERIES)))
+    # for first_completed in asyncio.as_completed(loop_wrap(QUERIES)):
+    #     res = await first_completed
+    #     print(f'Done {res}')
+    # # loop.run_forever()
 
+    # await asyncio.sleep(1 / MAX_REQ_BY_SEC)
 
-def main():
-
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(loop_wrap(QUERIES))
-    # loop.run_forever()
+QUERIES = list(product(CHEMISTRY, ACTIVITIES))
 
 
 if __name__ == "__main__":
-    main()
+    start_time = datetime.datetime.now()
+    logger.info("START")
+    asyncio.run(main(sample(QUERIES, 3)))
+    elapsed = (datetime.datetime.now() - start_time)
+    logger.info("DONE in %fs", elapsed.seconds + elapsed.microseconds/10**6)
