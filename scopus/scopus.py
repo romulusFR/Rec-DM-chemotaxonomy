@@ -44,7 +44,7 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 CSV_PARAMS = {"delimiter": ";", "quotechar": '"'}
 
 # API Scopus
-MAX_REQ_BY_SEC = 8
+MAX_REQ_BY_SEC = 5
 API_KEY = {"X-ELS-APIKey": "7047b3a8cf46d922d5d5ca71ff531b7d"}
 X_RATE_HEADERS = ["X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"]
 
@@ -101,7 +101,7 @@ async def query_httpbin(keyword1, keyword2, /, delay=1):
                 results_nb = json["form"]["answer"]
                 msg = f"run_async_query_test: query={args} results_nb={results_nb}"
                 logger.debug(msg)
-        except aiohttp.ClientError as err:
+        except Exception as err:
             logger.error(err)
             results_nb = -1
         finally:
