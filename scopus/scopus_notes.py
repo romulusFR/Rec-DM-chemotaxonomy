@@ -76,6 +76,27 @@ async def run_async_query(keyword1, keyword2, /, delay):
         return (keyword1, keyword2, results_nb, elapsed.seconds + elapsed.microseconds / 10 ** 6)
 
 
+async def main_wait_too_much(queries):
+    """Create tasks sequentially with throttling"""
+    results = {}
+    for (chemo, pharma) in queries:
+        results[(chemo, pharma)] = await run_async_query_test(chemo, pharma)
+        await asyncio.sleep(1 / MAX_REQ_BY_SEC)
+
+
+async def main_wait_for_creation(queries):
+    """Create tasks sequentially with throttling"""
+    coros = []
+    for (chemo, pharma) in queries:
+        coros.append(run_async_query_test(chemo, pharma))
+        await asyncio.sleep(1 / MAX_REQ_BY_SEC)
+    logger.info("main: %i jobs created", len(queries))
+
+    for coro in asyncio.as_completed(coros):
+        result = await coro
+        logger.info(result)
+
+
 async def main(queries):
     """Create tasks sequentially with throttling"""
     coros = []
