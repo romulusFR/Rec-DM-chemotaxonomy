@@ -166,7 +166,7 @@ def get_classes(filename):
 # NOTE : rows et cols sont surtout pour l'ordreet les cases vides si besoin
 def write_results(res_dict: dict[Tuple[str, str], Tuple[int, float]], rows, cols, row_classes, col_classes, filename):
     """Store result dict"""
-    logger.debug("write_results(%i, %s)", len(results), filename)
+    logger.debug("write_results(%i, %s)", len(res_dict), filename)
     with open(filename, "w", newline="", encoding="utf-8") as csvfile:
         writer = csv.writer(csvfile, **CSV_PARAMS)
         # pharmacological activity classes
@@ -187,8 +187,12 @@ def sorted_keys(classes, base_only=True):
 
 
 # %%
-BASE_ONLY=True
-if __name__ == "__main__":
+
+BASE_ONLY = True
+
+
+def download_all():
+    """Launch the batch of downloads"""
     compounds = get_classes(COMPOUNDS)
     pharmaco = get_classes(PHARMACOLOGY)
     compounds_keywords = sorted_keys(compounds, base_only=BASE_ONLY)
@@ -207,6 +211,9 @@ if __name__ == "__main__":
     write_results(results, compounds_keywords, pharmaco_keywords, compounds, pharmaco, output_filename)
     logger.info("WRITTEN %s", output_filename)
 
+
+if __name__ == "__main__":
+    download_all()
 
 # if __name__ == "__main__":
 #     asyncio.run(run_async_query("phenolic compound", "chronic disease", 0))

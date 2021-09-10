@@ -13,8 +13,8 @@ inflammation;Wound
 inflammation;Burns
 stimulant;stimulant
 diuretic; diuretic
-toxicity and intoxication;toxicity
-toxicity and intoxication;sedative
+toxicity / intoxication;toxicity
+toxicity / intoxication;sedative
 neoplasm;Anticancer
 neoplasm;cytotoxicity
 allergy;allergy
