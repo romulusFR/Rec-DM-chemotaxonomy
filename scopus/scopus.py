@@ -18,7 +18,7 @@ import pandas as pd
 
 logging.basicConfig()
 logger = logging.getLogger("scopus_api")
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 
 # https://www.twilio.com/blog/asynchronous-http-requests-in-python-with-aiohttp
 # https://stackoverflow.com/questions/48682147/aiohttp-rate-limiting-parallel-requests
@@ -44,9 +44,32 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 CSV_PARAMS = {"delimiter": ";", "quotechar": '"'}
 
 # API Scopus
-MAX_REQ_BY_SEC = 500
+MAX_REQ_BY_SEC = 8
 API_KEY = {"X-ELS-APIKey": "7047b3a8cf46d922d5d5ca71ff531b7d"}
 X_RATE_HEADERS = ["X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"]
+
+
+def standardize(string: str) -> str:
+    """Standardize strings"""
+    return string.strip().lower()
+
+
+# ( KEY ( terpenoid  OR  terpene ) AND KEY ( stimulant ) ) : 32
+# ( KEY ( terpenoid) OR KEY (terpene )) AND KEY ( stimulant ) : 32
+# ( KEY ( terpenoid) ) AND KEY ( stimulant ) : 8
+# ( KEY ( terpene) ) AND KEY ( stimulant ) : 24
+def build_search_query(keywords1, keywords2):
+    """transform two keywords into a SCOPUS API query string. Splits keywords as OR subqueries if needed"""
+
+    def slashes_to_or(string):
+        return " OR ".join(string.split("/"))
+
+    disjunct1 = slashes_to_or(keywords1)
+    disjunct2 = slashes_to_or(keywords2)
+    return {
+        "query": f'( KEY ( {disjunct1} ) AND KEY ( {disjunct2} ) ) AND ( DOCTYPE( "ar" ) )',
+        "count": 1,
+    }
 
 
 async def query_fake(keyword1, keyword2, /, delay=1):
@@ -55,17 +78,11 @@ async def query_fake(keyword1, keyword2, /, delay=1):
     await asyncio.sleep(delay)
     start_time = datetime.datetime.now()
     logger.debug("query_fake(%s, %s): launching at %s", keyword1, keyword2, start_time)
+    logger.debug("           %s", build_search_query(keyword1, keyword2)["query"])
+
     await asyncio.sleep(randint(1, 1000) / 1000)
     elapsed = datetime.datetime.now() - start_time
     return (keyword1, keyword2, results_nb, elapsed.seconds + elapsed.microseconds / 10 ** 6)
-
-
-def build_search_query(keywords1, keywords2):
-    """transform two keywords into a SCOPUS API query string. Splits keywords as OR subqueries if needed"""
-    return {
-        "query": f'( KEY ( {keywords1} ) AND KEY ( {keywords2} ) ) AND ( DOCTYPE( "ar" ) )',
-        "count": 1,
-    }
 
 
 async def query_httpbin(keyword1, keyword2, /, delay=1):
@@ -143,11 +160,6 @@ async def main(pairs, mode):
     return res_dict
 
 
-def standardize(string: str) -> str:
-    """Standardize strings"""
-    return string.strip().lower()
-
-
 def get_classes(filename):
     """Loads classes from a csv file with format (parent, child) and return a dict with ALL names"""
     logger.debug("get_classes(%s)", filename)
@@ -188,32 +200,30 @@ def sorted_keys(classes, base_only=True):
 
 # %%
 
-BASE_ONLY = True
 
-
-def download_all():
+def download_all(mode="mock", base_only=True):
     """Launch the batch of downloads"""
     compounds = get_classes(COMPOUNDS)
     pharmaco = get_classes(PHARMACOLOGY)
-    compounds_keywords = sorted_keys(compounds, base_only=BASE_ONLY)
-    pharmaco_keywords = sorted_keys(pharmaco, base_only=BASE_ONLY)
+    compounds_keywords = sorted_keys(compounds, base_only=base_only)
+    pharmaco_keywords = sorted_keys(pharmaco, base_only=base_only)
     queries = list(product(compounds_keywords, pharmaco_keywords))
     logger.info("%i compounds X %i pharmacology = %i", len(compounds_keywords), len(pharmaco_keywords), len(queries))
 
     main_start_time = datetime.datetime.now()
     logger.info("START")
-    results = asyncio.run(main(queries, mode="mock"))
+    results = asyncio.run(main(queries, mode=mode))
     total_time = datetime.datetime.now() - main_start_time
     logger.info("DONE in %fs", total_time.seconds + total_time.microseconds / 10 ** 6)
 
-    # output_filename = OUTPUT_DIR / f"activity_{datetime.datetime.now()}.csv"
-    output_filename = OUTPUT_DIR / f"activity_{'test'}.csv"
+    output_filename = OUTPUT_DIR / f"activity_{datetime.datetime.now()}.csv"
+    # output_filename = OUTPUT_DIR / f"activity_{'test'}.csv"
     write_results(results, compounds_keywords, pharmaco_keywords, compounds, pharmaco, output_filename)
     logger.info("WRITTEN %s", output_filename)
 
 
 if __name__ == "__main__":
-    download_all()
+    download_all(mode="scopus", base_only=True)
 
 # if __name__ == "__main__":
 #     asyncio.run(run_async_query("phenolic compound", "chronic disease", 0))

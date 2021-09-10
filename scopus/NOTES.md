@@ -14,6 +14,7 @@
 - <https://api.elsevier.com/content/search/sciencedirect>
 - <https://datasearch.elsevier.com/api/docs>
 - <https://dev.elsevier.com/documentation/ScopusSearchAPI.wadl>
+- <https://dev.elsevier.com/tips/ScopusSearchTips.htm>
 
 ```bash
 http --print HBhb PUT https://api.elsevier.com/content/search/sciencedirect X-ELS-APIKey:7047b3a8cf46d922d5d5ca71ff531b7d < search.json
