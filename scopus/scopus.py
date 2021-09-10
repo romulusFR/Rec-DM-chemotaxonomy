@@ -44,7 +44,7 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 CSV_PARAMS = {"delimiter": ";", "quotechar": '"'}
 
 # API Scopus
-MAX_REQ_BY_SEC = 5
+MAX_REQ_BY_SEC = 4
 API_KEY = {"X-ELS-APIKey": "7047b3a8cf46d922d5d5ca71ff531b7d"}
 X_RATE_HEADERS = ["X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"]
 
@@ -125,7 +125,7 @@ async def query_scopus(keyword1, keyword2, /, delay=1):
                 logger.debug(
                     "run_async_query(%s, %s) = %i @%s", keyword1, keyword2, results_nb, datetime.datetime.now()
                 )
-        except aiohttp.ClientError as err:
+        except Exception as err:
             logger.error(err)
             results_nb = -1
         finally:
@@ -223,7 +223,8 @@ def download_all(mode="mock", base_only=True):
 
 
 if __name__ == "__main__":
-    download_all(mode="scopus", base_only=True)
+    # download_all(mode="scopus", base_only=False)
+    pass
 
 # if __name__ == "__main__":
 #     asyncio.run(run_async_query("phenolic compound", "chronic disease", 0))
