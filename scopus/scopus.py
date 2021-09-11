@@ -161,12 +161,14 @@ async def main_gather_all(pairs, mode):
 
 
 async def produce(queue, queries):
+    """Produce jobs (queries) into the job queue"""
     for i, query in enumerate(queries):
         await queue.put(query)
         logger.debug("produce(): created job #%i query=%s", i, query)
 
 
 async def consume(queue, res_dict, task_factory, delay=1, name=None):
+    """A (parallel) consumer that send a query to scopus and then add result to a dict"""
     while True:
         (chemo, pharma) = await queue.get()
 
@@ -178,13 +180,15 @@ async def consume(queue, res_dict, task_factory, delay=1, name=None):
 
 
 async def main_queue(pairs, mode):
+    """Create tasks in a queue which is emptied in parallele ensuring at most MAX_REQ_BY_SEC requests per second"""
     jobs = asyncio.Queue()
     res_dict = defaultdict(dict)
     task_factory = MODES.get(mode, MODES["fake"])
 
-    # on crée les dtâches qui commencent à s'exécuter : 1 producteur
+    # ONE producer task to fill the queue
     producer_task = asyncio.create_task(produce(jobs, pairs), name="producer")
-    # et autant de consomatteur qu'on a droit de requete/sec
+    # MAX_REQ_BY_SEC consummers that run in parallel and that can fire at most
+    # one request per second
     consumer_tasks = [
         asyncio.create_task(consume(jobs, res_dict, task_factory, delay=1, name=i), name=f"consumer-{i}")
         for i in range(MAX_REQ_BY_SEC)
@@ -196,6 +200,7 @@ async def main_queue(pairs, mode):
     # on attend que tout soit traité, après que tout soit généré
     await jobs.join()
     logger.info("All jobs dones")
+    # stop all consumer stuck waiting job from the queue
     for consumer in consumer_tasks:
         consumer.cancel()
     return res_dict
