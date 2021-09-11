@@ -72,7 +72,7 @@ def build_search_query(keywords1, keywords2):
     }
 
 
-async def query_fake(keyword1, keyword2, /, delay=1):
+async def query_fake(_, keyword1, keyword2, /, delay=1):
     """Fake query tool without network, for test purpose"""
     results_nb = randint(1, 10000)
     await asyncio.sleep(delay)
@@ -85,52 +85,47 @@ async def query_fake(keyword1, keyword2, /, delay=1):
     return (keyword1, keyword2, results_nb, elapsed.seconds + elapsed.microseconds / 10 ** 6)
 
 
-async def query_httpbin(keyword1, keyword2, /, delay=1):
+async def query_httpbin(session, keyword1, keyword2, /, delay=1):
     """Fake query tool WITH network on httpbin, for test purpose"""
     url = "http://httpbin.org/anything"
     data = {"answer": randint(1, 10000)}
     results_nb = -1
-    await asyncio.sleep(delay)
+    # await asyncio.sleep(delay)
     start_time = datetime.datetime.now()
     logger.debug("query_httpbin(%s, %s): launching at %s", keyword1, keyword2, start_time)
-    async with aiohttp.ClientSession() as session:
-        try:
-            async with session.get(url, params=build_search_query(keyword1, keyword2), data=data) as resp:
-                json = await resp.json()
-                args = json["args"]["query"]
-                results_nb = json["form"]["answer"]
-                msg = f"run_async_query_test: query={args} results_nb={results_nb}"
-                logger.debug(msg)
-        except Exception as err:
-            logger.error(err)
-            results_nb = -1
-        finally:
-            elapsed = datetime.datetime.now() - start_time
-        return (keyword1, keyword2, results_nb, elapsed.seconds + elapsed.microseconds / 10 ** 6)
+    try:
+        async with session.get(url, params=build_search_query(keyword1, keyword2), data=data) as resp:
+            json = await resp.json()
+            # args = json["args"]["query"]
+            results_nb = int(json["form"]["answer"])
+            logger.debug("query_httpbin(%s, %s): results_nb=%i", keyword1, keyword2, results_nb)
+    except Exception as err:
+        logger.error(err)
+        results_nb = -1
+    finally:
+        elapsed = datetime.datetime.now() - start_time
+    return (keyword1, keyword2, results_nb, elapsed.seconds + elapsed.microseconds / 10 ** 6)
 
 
-async def query_scopus(keyword1, keyword2, /, delay=1):
+async def query_scopus(session, keyword1, keyword2, /, delay=1):
     """SCOPUS query tool: return the number of article papers having two sets of keywords. Delay is in sec"""
     scopus_url = "https://api.elsevier.com/content/search/scopus"
     results_nb = -1
-    await asyncio.sleep(delay)
+    # await asyncio.sleep(delay)
     start_time = datetime.datetime.now()
     logger.debug("query_scopus(%s, %s) @%s", keyword1, keyword2, start_time)
-    async with aiohttp.ClientSession() as session:
-        try:
-            async with session.get(scopus_url, params=build_search_query(keyword1, keyword2), headers=API_KEY) as resp:
-                logger.debug("X-RateLimit-Remaining=%s", resp.headers.get("X-RateLimit-Remaining", None))
-                json = await resp.json()
-                results_nb = int(json["search-results"]["opensearch:totalResults"], 10)
-                logger.debug(
-                    "run_async_query(%s, %s) = %i @%s", keyword1, keyword2, results_nb, datetime.datetime.now()
-                )
-        except Exception as err:
-            logger.error(err)
-            results_nb = -1
-        finally:
-            elapsed = datetime.datetime.now() - start_time
-        return (keyword1, keyword2, results_nb, elapsed.seconds + elapsed.microseconds / 10 ** 6)
+    try:
+        async with session.get(scopus_url, params=build_search_query(keyword1, keyword2), headers=API_KEY) as resp:
+            logger.debug("X-RateLimit-Remaining=%s", resp.headers.get("X-RateLimit-Remaining", None))
+            json = await resp.json()
+            results_nb = int(json["search-results"]["opensearch:totalResults"], 10)
+            logger.debug("run_async_query(%s, %s) = %i @%s", keyword1, keyword2, results_nb, datetime.datetime.now())
+    except Exception as err:
+        logger.error(err)
+        results_nb = -1
+    finally:
+        elapsed = datetime.datetime.now() - start_time
+    return (keyword1, keyword2, results_nb, elapsed.seconds + elapsed.microseconds / 10 ** 6)
 
 
 # query modes : one fake, one fake over network, one true
@@ -145,15 +140,16 @@ async def main_gather_all(pairs, mode):
     task_factory = MODES.get(mode, MODES["fake"])
     # build all the tasks, each one sending an http network request over the network after some delay
     # delay is incremented by 1/MAX_REQ_BY_SEC
-    for i, (chemo, pharma) in enumerate(pairs):
-        delay = i * 1 / MAX_REQ_BY_SEC
-        task = asyncio.create_task(task_factory(chemo, pharma, delay=delay))
-        coros.append(task)
-    logger.info(
-        "main: %i jobs created, estimated duration %f sec", len(pairs), len(pairs) / MAX_REQ_BY_SEC + BASE_RESPONSE_TIME
-    )
+    async with aiohttp.ClientSession() as session:
+        for i, (chemo, pharma) in enumerate(pairs):
+            delay = i * 1 / MAX_REQ_BY_SEC
+            task = asyncio.create_task(task_factory(session, chemo, pharma, delay=delay))
+            coros.append(task)
+        logger.info(
+            "main: %i jobs created, estimated duration %f sec", len(pairs), len(pairs) / MAX_REQ_BY_SEC + BASE_RESPONSE_TIME
+        )
+        res = await asyncio.gather(*coros)
 
-    res = await asyncio.gather(*coros)
     res_dict = defaultdict(dict)
     for (chemo, pharma, nb_results, _) in res:
         res_dict[chemo][pharma] = nb_results
@@ -167,12 +163,12 @@ async def produce(queue, queries):
         logger.debug("produce(): created job #%i query=%s", i, query)
 
 
-async def consume(queue, res_dict, task_factory, delay=1, name=None):
+async def consume(session, queue, res_dict, task_factory, delay=1, name=None):
     """A (parallel) consumer that send a query to scopus and then add result to a dict"""
     while True:
         (chemo, pharma) = await queue.get()
 
-        (chemo, pharma, nb_results, duration) = await task_factory(chemo, pharma, delay=delay)
+        (chemo, pharma, nb_results, duration) = await task_factory(session, chemo, pharma, delay=delay)
         logger.info("consume(%s): got %s from job %s after %f", name, nb_results, (chemo, pharma), duration)
         await asyncio.sleep(max(delay - duration, 0))
         res_dict[chemo][pharma] = nb_results
@@ -189,20 +185,21 @@ async def main_queue(pairs, mode):
     producer_task = asyncio.create_task(produce(jobs, pairs), name="producer")
     # MAX_REQ_BY_SEC consummers that run in parallel and that can fire at most
     # one request per second
-    consumer_tasks = [
-        asyncio.create_task(consume(jobs, res_dict, task_factory, delay=1, name=i), name=f"consumer-{i}")
-        for i in range(MAX_REQ_BY_SEC)
-    ]
+    async with aiohttp.ClientSession(raise_for_status=True) as session:
+        consumer_tasks = [
+            asyncio.create_task(consume(session, jobs, res_dict, task_factory, delay=1, name=i), name=f"consumer-{i}")
+            for i in range(MAX_REQ_BY_SEC)
+        ]
 
-    logger.info("Tasks created")
-    await asyncio.gather(producer_task)
+        logger.info("Tasks created")
+        await asyncio.gather(producer_task)
 
-    # on attend que tout soit traité, après que tout soit généré
-    await jobs.join()
-    logger.info("All jobs dones")
-    # stop all consumer stuck waiting job from the queue
-    for consumer in consumer_tasks:
-        consumer.cancel()
+        # on attend que tout soit traité, après que tout soit généré
+        await jobs.join()
+        logger.info("All jobs dones")
+        # stop all consumer stuck waiting job from the queue
+        for consumer in consumer_tasks:
+            consumer.cancel()
     return res_dict
 
 
@@ -261,15 +258,14 @@ def download_all(mode="mock", base_only=True):
     results = asyncio.run(main_queue(queries, mode=mode))
     total_time = datetime.datetime.now() - main_start_time
     logger.info("DONE in %fs", total_time.seconds + total_time.microseconds / 10 ** 6)
-
-    output_filename = OUTPUT_DIR / f"activity_{datetime.datetime.now()}.csv"
-    # output_filename = OUTPUT_DIR / f"activity_{'test'}.csv"
+    now = datetime.datetime.now().strftime("%Y-%m-%d_%Hh%Mm%Ss")
+    output_filename = OUTPUT_DIR / f"activity_{now}.csv"
     write_results(results, compounds_keywords, pharmaco_keywords, compounds, pharmaco, output_filename)
     logger.info("WRITTEN %s", output_filename)
 
 
 if __name__ == "__main__":
-    download_all(mode="mock", base_only=True)
+    download_all(mode="httpbin", base_only=True)
     # pass
 
 # if __name__ == "__main__":
