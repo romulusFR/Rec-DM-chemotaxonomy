@@ -18,7 +18,7 @@ import pandas as pd
 
 logging.basicConfig()
 logger = logging.getLogger("scopus_api")
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 # https://www.twilio.com/blog/asynchronous-http-requests-in-python-with-aiohttp
 # https://stackoverflow.com/questions/48682147/aiohttp-rate-limiting-parallel-requests
@@ -44,7 +44,7 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 CSV_PARAMS = {"delimiter": ";", "quotechar": '"'}
 
 # API Scopus
-MAX_REQ_BY_SEC = 4
+MAX_REQ_BY_SEC = 8
 API_KEY = {"X-ELS-APIKey": "7047b3a8cf46d922d5d5ca71ff531b7d"}
 X_RATE_HEADERS = ["X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"]
 
@@ -138,7 +138,7 @@ MODES = {"scopus": query_scopus, "httpbin": query_httpbin, "fake": query_fake}
 BASE_RESPONSE_TIME = 1.0
 
 
-async def main(pairs, mode):
+async def main_gather_all(pairs, mode):
     """Create tasks sequentially with throttling : one query every 1/MAX_REQ_BY_SEC second"""
     coros = []
     # pick the query mode
@@ -157,6 +157,47 @@ async def main(pairs, mode):
     res_dict = defaultdict(dict)
     for (chemo, pharma, nb_results, _) in res:
         res_dict[chemo][pharma] = nb_results
+    return res_dict
+
+
+async def produce(queue, queries):
+    for i, query in enumerate(queries):
+        await queue.put(query)
+        logger.debug("produce(): created job #%i query=%s", i, query)
+
+
+async def consume(queue, res_dict, task_factory, delay=1, name=None):
+    while True:
+        (chemo, pharma) = await queue.get()
+
+        (chemo, pharma, nb_results, duration) = await task_factory(chemo, pharma, delay=delay)
+        logger.info("consume(%s): got %s from job %s after %f", name, nb_results, (chemo, pharma), duration)
+        await asyncio.sleep(max(delay - duration, 0))
+        res_dict[chemo][pharma] = nb_results
+        queue.task_done()
+
+
+async def main_queue(pairs, mode):
+    jobs = asyncio.Queue()
+    res_dict = defaultdict(dict)
+    task_factory = MODES.get(mode, MODES["fake"])
+
+    # on crée les dtâches qui commencent à s'exécuter : 1 producteur
+    producer_task = asyncio.create_task(produce(jobs, pairs), name="producer")
+    # et autant de consomatteur qu'on a droit de requete/sec
+    consumer_tasks = [
+        asyncio.create_task(consume(jobs, res_dict, task_factory, delay=1, name=i), name=f"consumer-{i}")
+        for i in range(MAX_REQ_BY_SEC)
+    ]
+
+    logger.info("Tasks created")
+    await asyncio.gather(producer_task)
+
+    # on attend que tout soit traité, après que tout soit généré
+    await jobs.join()
+    logger.info("All jobs dones")
+    for consumer in consumer_tasks:
+        consumer.cancel()
     return res_dict
 
 
@@ -212,7 +253,7 @@ def download_all(mode="mock", base_only=True):
 
     main_start_time = datetime.datetime.now()
     logger.info("START")
-    results = asyncio.run(main(queries, mode=mode))
+    results = asyncio.run(main_queue(queries, mode=mode))
     total_time = datetime.datetime.now() - main_start_time
     logger.info("DONE in %fs", total_time.seconds + total_time.microseconds / 10 ** 6)
 
@@ -223,8 +264,8 @@ def download_all(mode="mock", base_only=True):
 
 
 if __name__ == "__main__":
-    # download_all(mode="scopus", base_only=False)
-    pass
+    download_all(mode="mock", base_only=True)
+    # pass
 
 # if __name__ == "__main__":
 #     asyncio.run(run_async_query("phenolic compound", "chronic disease", 0))
