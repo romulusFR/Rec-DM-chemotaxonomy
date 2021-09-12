@@ -35,7 +35,7 @@ CHEMISTRY = ["alkaloid", "polyphenol", "coumarin"]
 ACTIVITIES = ["antiinflammatory", "anticoagulant", "cancer"]
 RESULTS = {"acridine": {"anticancer": "2790"}, "pyridine": {"toxicant": "1904"}, "tetracycline": {"repulsive": "4598"}}
 QUERIES = list(product(CHEMISTRY, ACTIVITIES))
-NB_MAX_TEST_QUERIES = 5
+ERROR_RATE = 1 # (in %)
 
 # DATASETS
 COMPOUNDS = Path("data") / "compounds.csv"
@@ -149,7 +149,7 @@ async def query_fake(_, keyword1, keyword2, *, delay=0):
 async def query_httpbin(session, keyword1, keyword2, *, delay=0):
     """Fake query tool WITH network on httpbin, for test purpose"""
     # simule 1% d'erreur
-    if randint(1, 100) <= 1:
+    if randint(1, 100) <= ERROR_RATE:
         url = "http://httpbin.org/status/429"
     else:
         url = "http://httpbin.org/anything"
@@ -236,7 +236,9 @@ async def main_queue(queries, mode, parallel):
     consumer_tasks = []
     async with aiohttp.ClientSession(raise_for_status=True) as session:
         consumer_tasks = [
-            asyncio.create_task(consume(session, jobs, res_dict, task_factory, min_delay=1, name=i), name=f"consumer-{i}")
+            asyncio.create_task(
+                consume(session, jobs, res_dict, task_factory, min_delay=1, name=i), name=f"consumer-{i}"
+            )
             for i in range(1, parallel + 1)
         ]
 
@@ -253,8 +255,8 @@ async def main_queue(queries, mode, parallel):
         nb_jobs_done = await asyncio.gather(*consumer_tasks)
         logger.info("All consumers cancelled, jobs done : %s", nb_jobs_done)
 
-    pending = asyncio.all_tasks()
-    logger.debug(pending)
+    # pending = asyncio.all_tasks()
+    # logger.debug(pending)
 
     return res_dict
 
@@ -285,8 +287,11 @@ def download_all(mode="mock", parallel=MAX_REQ_BY_SEC, samples=None, all_classes
     main_start_time = time.perf_counter()
     logger.info("START")
 
+    # correction bug scopus
     # results = asyncio.run(main_queue(queries, mode=mode))
-    results = asyncio.get_event_loop().run_until_complete(main_queue(queries=queries, parallel=parallel, mode=mode))
+    loop = asyncio.get_event_loop()
+    main_task = loop.create_task(main_queue(queries=queries, parallel=parallel, mode=mode), name=f"main-queue")
+    results = loop.run_until_complete(main_task)
 
     total_time = time.perf_counter() - main_start_time
     logger.info("DONE in %fs", total_time)
@@ -351,7 +356,9 @@ if __name__ == "__main__":
         LEVEL = logging.INFO
     logger.setLevel(LEVEL)
 
-    download_all(mode=args.mode, parallel=args.parallel, samples=args.samples, all_classes=args.all, no_write=args.no_write)
+    download_all(
+        mode=args.mode, parallel=args.parallel, samples=args.samples, all_classes=args.all, no_write=args.no_write
+    )
     # pass
 
 # if __name__ == "__main__":
