@@ -3,6 +3,7 @@
 # %%
 
 import asyncio
+import argparse
 import csv
 import time
 from datetime import datetime
@@ -47,7 +48,7 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 CSV_PARAMS = {"delimiter": ";", "quotechar": '"'}
 
 # API Scopus
-MAX_REQ_BY_SEC = 2
+MAX_REQ_BY_SEC = 8
 API_KEY = {"X-ELS-APIKey": "7047b3a8cf46d922d5d5ca71ff531b7d"}
 X_RATE_HEADERS = ["X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"]
 SSL_CONTEXT = ssl.create_default_context(cafile=certifi.where())
@@ -163,7 +164,7 @@ async def query_httpbin(session, keyword1, keyword2, *, delay=0):
             # args = json["args"]["query"]
             results_nb = int(json["form"]["answer"])
             logger.debug("query_httpbin(%s, %s): results_nb=%i", keyword1, keyword2, results_nb)
-    except Exception as err:  # aiohttp.ClientError
+    except aiohttp.ClientError as err:  # aiohttp.ClientError
         logger.error(err)
         results_nb = -1
     finally:
@@ -185,7 +186,7 @@ async def query_scopus(session, keyword1, keyword2, *, delay=0):
             json = await resp.json()
             results_nb = int(json["search-results"]["opensearch:totalResults"], 10)
             logger.debug("query_scopus(%s, %s): results_nb=%i", keyword1, keyword2, results_nb)
-    except Exception as err:  # aiohttp.ClientError
+    except aiohttp.ClientError as err:
         logger.error(err)
         results_nb = -1
     finally:
@@ -218,24 +219,25 @@ async def consume(session, queue, res_dict, task_factory, delay=1, name=None):
             queue.task_done()
             jobs_done += 1
     except asyncio.CancelledError:
-        logger.info("task %s received cancel, done %i jobs", name, jobs_done)
+        logger.debug("task %s received cancel, done %i jobs", name, jobs_done)
     return jobs_done
 
-async def main_queue(pairs, mode):
+
+async def main_queue(queries, mode, parallel):
     """Create tasks in a queue which is emptied in parallele ensuring at most MAX_REQ_BY_SEC requests per second"""
     jobs = asyncio.Queue()
     res_dict = defaultdict(dict)
     task_factory = MODES.get(mode, MODES["fake"])
 
     # ONE producer task to fill the queue
-    producer_task = asyncio.create_task(produce(jobs, pairs), name="producer")
+    producer_task = asyncio.create_task(produce(jobs, queries), name="producer")
     # MAX_REQ_BY_SEC consummers that run in parallel and that can fire at most
     # one request per second
     consumer_tasks = []
     async with aiohttp.ClientSession(raise_for_status=True) as session:
         consumer_tasks = [
             asyncio.create_task(consume(session, jobs, res_dict, task_factory, delay=1, name=i), name=f"consumer-{i}")
-            for i in range(MAX_REQ_BY_SEC)
+            for i in range(1, parallel + 1)
         ]
 
         logger.info("Tasks created")
@@ -247,13 +249,12 @@ async def main_queue(pairs, mode):
         # stop all consumer stuck waiting job from the queue
         for consumer in consumer_tasks:
             consumer.cancel()
-        logger.info("Consumers cancellation ordered")
-        await asyncio.gather(*consumer_tasks)
-        logger.info("Consumers cancelled")
+        logger.debug("Consumers cancellation ordered")
+        nb_jobs_done = await asyncio.gather(*consumer_tasks)
+        logger.info("All consumers cancelled, jobs done : %s", nb_jobs_done)
 
     pending = asyncio.all_tasks()
-    logger.info(pending)
-
+    logger.debug(pending)
 
     return res_dict
 
@@ -267,35 +268,90 @@ def sorted_keys(classes, base_only=True):
 
 # %%
 
-
-def download_all(mode="mock", base_only=True):
+# download_all(mode=args.mode, parallel=args.parallel, , samples=args.samples, all=args.all, write=args.write)
+def download_all(mode="mock", parallel=MAX_REQ_BY_SEC, samples=None, all_classes=False, write=False):
     """Launch the batch of downloads"""
     compounds = get_classes(COMPOUNDS)
     pharmaco = get_classes(PHARMACOLOGY)
-    compounds_keywords = sorted_keys(compounds, base_only=base_only)
-    pharmaco_keywords = sorted_keys(pharmaco, base_only=base_only)
-    queries = sample(list(product(compounds_keywords, pharmaco_keywords)), 4)
-    # queries = list(product(compounds_keywords, pharmaco_keywords))
+    compounds_keywords = sorted_keys(compounds, base_only=not all_classes)
+    pharmaco_keywords = sorted_keys(pharmaco, base_only=not all_classes)
+    if samples is None:
+        queries = list(product(compounds_keywords, pharmaco_keywords))
+    else:
+        queries = sample(list(product(compounds_keywords, pharmaco_keywords)), samples)
+
     logger.info("%i compounds X %i pharmacology = %i", len(compounds_keywords), len(pharmaco_keywords), len(queries))
 
     main_start_time = time.perf_counter()
     logger.info("START")
 
-    results = asyncio.run(main_queue(queries, mode=mode))
+    # results = asyncio.run(main_queue(queries, mode=mode))
+    results = asyncio.get_event_loop().run_until_complete(main_queue(queries=queries, parallel=parallel, mode=mode))
 
     total_time = time.perf_counter() - main_start_time
     logger.info("DONE in %fs", total_time)
 
-    now = datetime.now().strftime("%Y-%m-%d_%Hh%Mm%Ss")
-    output_filename = OUTPUT_DIR / f"activity_{now}.csv"
-    write_results(results, compounds_keywords, pharmaco_keywords, compounds, pharmaco, output_filename)
-    logger.info("WRITTEN %s", output_filename)
+    if write:
+        now = datetime.now().strftime("%Y-%m-%d_%Hh%Mm%Ss")
+        output_filename = OUTPUT_DIR / f"activity_{now}.csv"
+        write_results(results, compounds_keywords, pharmaco_keywords, compounds, pharmaco, output_filename)
+        logger.info("WRITTEN %s", output_filename)
 
 
+def get_parser():
+    """argparse configuration"""
+    arg_parser = argparse.ArgumentParser(description="Scopus downloader")
+    arg_parser.add_argument(
+        "--verbose", "-v", action="store_true", default=False, help="verbosity level set to DEBUG, default is INFO"
+    )
+    arg_parser.add_argument(
+        "--mode", "-m", action="store", default="mock", help="download mode: 'mock' (default), 'httpbin' or 'scopus'"
+    )
+    arg_parser.add_argument(
+        "--parallel",
+        "-p",
+        type=int,
+        action="store",
+        default=MAX_REQ_BY_SEC,
+        help=f"number of parallel consumers, default {MAX_REQ_BY_SEC}",
+    )
+    arg_parser.add_argument(
+        "--samples",
+        "-s",
+        type=int,
+        action="store",
+        default=None,
+        help="maximum number of queries (random sample), default None (all)",
+    )
+    arg_parser.add_argument(
+        "--all",
+        "-a",
+        action="store_true",
+        default=False,
+        help="download both parent categories and children",
+    )
+    arg_parser.add_argument(
+        "--write",
+        "-w",
+        action="store_true",
+        default=False,
+        help="write results to csv file (default False)",
+    )
+    return arg_parser
 
 
 if __name__ == "__main__":
-    download_all(mode="httpbin", base_only=True)
+    parser = get_parser()
+    args = parser.parse_args()
+
+    # https://docs.python.org/3/library/logging.html#levels
+    if args.verbose:
+        LEVEL = logging.DEBUG
+    else:
+        LEVEL = logging.INFO
+    logger.setLevel(LEVEL)
+
+    download_all(mode=args.mode, parallel=args.parallel, samples=args.samples, all_classes=args.all, write=args.write)
     # pass
 
 # if __name__ == "__main__":
