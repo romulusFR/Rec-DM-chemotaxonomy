@@ -206,7 +206,7 @@ async def produce(queue, queries):
         logger.debug("produce(): created job #%i query=%s", i, query)
 
 
-async def consume(session, queue, res_dict, task_factory, delay=1, name=None):
+async def consume(session, queue, res_dict, task_factory, min_delay=1, name=None):
     """A (parallel) consumer that send a query to scopus and then add result to a dict"""
     jobs_done = 0
     try:
@@ -214,7 +214,7 @@ async def consume(session, queue, res_dict, task_factory, delay=1, name=None):
             (kw1, kw2) = await queue.get()
             (chemo, pharma, nb_results, duration) = await task_factory(session, kw1, kw2, delay=0)
             logger.info("consume(%s): got %s from job %s after %f", name, nb_results, (chemo, pharma), duration)
-            await asyncio.sleep(max(delay - duration, 0))
+            await asyncio.sleep(max(min_delay - duration, 0))
             res_dict[chemo][pharma] = nb_results
             queue.task_done()
             jobs_done += 1
@@ -236,7 +236,7 @@ async def main_queue(queries, mode, parallel):
     consumer_tasks = []
     async with aiohttp.ClientSession(raise_for_status=True) as session:
         consumer_tasks = [
-            asyncio.create_task(consume(session, jobs, res_dict, task_factory, delay=1, name=i), name=f"consumer-{i}")
+            asyncio.create_task(consume(session, jobs, res_dict, task_factory, min_delay=1, name=i), name=f"consumer-{i}")
             for i in range(1, parallel + 1)
         ]
 
@@ -269,7 +269,7 @@ def sorted_keys(classes, base_only=True):
 # %%
 
 # download_all(mode=args.mode, parallel=args.parallel, , samples=args.samples, all=args.all, write=args.write)
-def download_all(mode="mock", parallel=MAX_REQ_BY_SEC, samples=None, all_classes=False, write=False):
+def download_all(mode="mock", parallel=MAX_REQ_BY_SEC, samples=None, all_classes=False, no_write=False):
     """Launch the batch of downloads"""
     compounds = get_classes(COMPOUNDS)
     pharmaco = get_classes(PHARMACOLOGY)
@@ -291,7 +291,7 @@ def download_all(mode="mock", parallel=MAX_REQ_BY_SEC, samples=None, all_classes
     total_time = time.perf_counter() - main_start_time
     logger.info("DONE in %fs", total_time)
 
-    if write:
+    if not no_write:
         now = datetime.now().strftime("%Y-%m-%d_%Hh%Mm%Ss")
         output_filename = OUTPUT_DIR / f"activity_{now}.csv"
         write_results(results, compounds_keywords, pharmaco_keywords, compounds, pharmaco, output_filename)
@@ -331,11 +331,11 @@ def get_parser():
         help="download both parent categories and children",
     )
     arg_parser.add_argument(
-        "--write",
+        "--no-write",
         "-w",
         action="store_true",
         default=False,
-        help="write results to csv file (default False)",
+        help="do not write results to csv file (default False)",
     )
     return arg_parser
 
@@ -351,7 +351,7 @@ if __name__ == "__main__":
         LEVEL = logging.INFO
     logger.setLevel(LEVEL)
 
-    download_all(mode=args.mode, parallel=args.parallel, samples=args.samples, all_classes=args.all, write=args.write)
+    download_all(mode=args.mode, parallel=args.parallel, samples=args.samples, all_classes=args.all, no_write=args.no_write)
     # pass
 
 # if __name__ == "__main__":
