@@ -80,9 +80,7 @@ pdf_cls_cls.rename(columns={"index": "compound"}, inplace=True)
 
 f, ax = plt.subplots(figsize=(12, 6))
 sns.despine(f)
-sns.histplot(
-    pdf_cls_cls, discrete=True, multiple="stack", x="compound", hue="pharmacology", stat="count", weights="nb"
-)
+sns.histplot(pdf_cls_cls, discrete=True, multiple="stack", x="compound", hue="pharmacology", stat="count", weights="nb")
 
 
 # %%
@@ -94,7 +92,9 @@ df_sub_sub = df_sub_sub.loc[df_sub_sub.sum(axis=1) > 100, df_sub_sub.sum(axis=0)
 
 
 # on pivote
-pdf_sub_sub = pd.melt(df_sub_sub.reset_index(), ignore_index=True, var_name="pharmacology", value_name="nb", id_vars="index")
+pdf_sub_sub = pd.melt(
+    df_sub_sub.reset_index(), ignore_index=True, var_name="pharmacology", value_name="nb", id_vars="index"
+)
 pdf_sub_sub.rename(columns={"index": "compound"}, inplace=True)
 
 
@@ -104,8 +104,15 @@ sns.despine(f)
 plt.xticks(rotation=90 * 0.75)
 
 
-
-sns.histplot(pdf_sub_sub, discrete=True, multiple="stack", x="compound", hue="pharmacology", stat="count", weights="nb", )
+sns.histplot(
+    pdf_sub_sub,
+    discrete=True,
+    multiple="stack",
+    x="compound",
+    hue="pharmacology",
+    stat="count",
+    weights="nb",
+)
 
 # %%
 
@@ -113,7 +120,9 @@ sns.histplot(pdf_sub_sub, discrete=True, multiple="stack", x="compound", hue="ph
 sns.set_theme(style="ticks")
 # ici on peut normaliser, ici par ligne
 df_sub_sub_n = df_sub_sub.apply(lambda x: 100 * x / df_sub_sub.sum(axis=1))
-pdf_sub_sub_n = pd.melt(df_sub_sub_n.reset_index(), ignore_index=True, var_name="pharmacology", value_name="nb", id_vars="index")
+pdf_sub_sub_n = pd.melt(
+    df_sub_sub_n.reset_index(), ignore_index=True, var_name="pharmacology", value_name="nb", id_vars="index"
+)
 pdf_sub_sub_n.rename(columns={"index": "compound"}, inplace=True)
 
 # palette = sns.color_palette("husl", len(pharm_sub))
@@ -130,7 +139,6 @@ sns.histplot(
     hue="pharmacology",
     stat="count",
     weights="nb",
- 
 )
 
 # %%
