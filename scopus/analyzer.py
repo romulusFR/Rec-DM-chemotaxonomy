@@ -12,9 +12,11 @@ from pathlib import Path
 from typing import Tuple
 
 import numpy as np
+import sklearn as sk
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+
 
 from downloader import BASE_CLASS, get_classes, COMPOUNDS, PHARMACOLOGY, sorted_keys
 
@@ -127,7 +129,7 @@ pdf_sub_sub_n.rename(columns={"index": "compound"}, inplace=True)
 
 # palette = sns.color_palette("husl", len(pharm_sub))
 
-# %%
+
 f, ax = plt.subplots(figsize=(12, 6))
 sns.despine(f)
 plt.xticks(rotation=90 * 0.75)
@@ -143,5 +145,8 @@ sns.histplot(
 
 # %%
 # on va randomiser les classes pharmaco
-hue_order = pharm_sub.copy()
-random.shuffle(hue_order)
+# hue_order = pharm_sub.copy()
+# random.shuffle(hue_order)
+
+
+# %%
