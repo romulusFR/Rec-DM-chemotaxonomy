@@ -2,22 +2,22 @@
 # pylint: disable=unused-import
 # %%
 
-import asyncio
 import argparse
+import asyncio
 import csv
-import time
-from datetime import datetime
 import logging
+import ssl
+import time
 from collections import defaultdict
+from datetime import datetime
 from itertools import product
 from pathlib import Path
 from pprint import pprint
 from random import randint, sample
 from typing import Tuple
 
-import ssl
-import certifi
 import aiohttp
+import certifi
 import pandas as pd
 
 logging.basicConfig()
