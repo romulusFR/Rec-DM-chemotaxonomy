@@ -118,6 +118,21 @@ sns.histplot(
 
 # %%
 
+# matrice des correlation, Pearson par défaut
+
+# pharm X pharm
+df_sub_sub.corr()
+
+# chemo X chemo
+df_sub_sub.transpose().corr()
+
+# %%
+f, ax = plt.subplots(figsize=(10, 8))
+ax = sns.heatmap(df_sub_sub.corr())
+
+
+# %%
+
 # l'histogramme relatif
 sns.set_theme(style="ticks")
 # ici on peut normaliser, ici par ligne
@@ -132,7 +147,7 @@ pdf_sub_sub_n.rename(columns={"index": "compound"}, inplace=True)
 
 f, ax = plt.subplots(figsize=(12, 6))
 sns.despine(f)
-plt.xticks(rotation=90 * 0.75)
+plt.xticks(rotation=90)
 sns.histplot(
     pdf_sub_sub_n,
     discrete=True,
@@ -150,3 +165,8 @@ sns.histplot(
 
 
 # %%
+f, ax = plt.subplots(figsize=(10, 8))
+corr = df_sub_sub_n.corr()
+mask = np.triu(np.ones_like(corr))
+
+ax = sns.heatmap(corr, mask = mask)
