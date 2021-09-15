@@ -35,7 +35,7 @@ CHEMISTRY = ["alkaloid", "polyphenol", "coumarin"]
 ACTIVITIES = ["antiinflammatory", "anticoagulant", "cancer"]
 RESULTS = {"acridine": {"anticancer": "2790"}, "pyridine": {"toxicant": "1904"}, "tetracycline": {"repulsive": "4598"}}
 QUERIES = list(product(CHEMISTRY, ACTIVITIES))
-ERROR_RATE = 1 # (in %)
+ERROR_RATE = 1  # (in %)
 
 # DATASETS
 COMPOUNDS = Path("data") / "compounds.csv"
@@ -48,10 +48,15 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 CSV_PARAMS = {"delimiter": ";", "quotechar": '"'}
 
 # API Scopus
-MAX_REQ_BY_SEC = 8
 API_KEY = {"X-ELS-APIKey": "7047b3a8cf46d922d5d5ca71ff531b7d"}
 X_RATE_HEADERS = ["X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"]
 SSL_CONTEXT = ssl.create_default_context(cafile=certifi.where())
+
+# DEFAULT VALUES
+DEFAULT_WORKERS = 8
+DEFAULT_DELAY_PER_WORKER = 1.0
+DEFAULT_SAMPLES = None
+DEFAULT_MODE = "mock"
 
 
 def get_classes(filename):
@@ -117,13 +122,13 @@ async def main_gather_all(pairs, mode):
     # delay is incremented by 1/MAX_REQ_BY_SEC
     async with aiohttp.ClientSession() as session:
         for i, (chemo, pharma) in enumerate(pairs):
-            delay = i * 1 / MAX_REQ_BY_SEC
+            delay = i * 1 / DEFAULT_WORKERS
             task = asyncio.create_task(task_factory(session, chemo, pharma, delay=delay))
             coros.append(task)
         logger.info(
             "main: %i jobs created, estimated duration %f sec",
             len(pairs),
-            len(pairs) / MAX_REQ_BY_SEC + BASE_RESPONSE_TIME,
+            len(pairs) / DEFAULT_WORKERS + BASE_RESPONSE_TIME,
         )
         res = await asyncio.gather(*coros)
 
@@ -206,7 +211,7 @@ async def produce(queue, queries):
         logger.debug("produce(): created job #%i query=%s", i, query)
 
 
-async def consume(session, queue, res_dict, task_factory, min_delay=1, name=None):
+async def consume(session, queue, res_dict, task_factory, delay=1, name=None):
     """A (parallel) consumer that send a query to scopus and then add result to a dict"""
     jobs_done = 0
     try:
@@ -214,7 +219,7 @@ async def consume(session, queue, res_dict, task_factory, min_delay=1, name=None
             (kw1, kw2) = await queue.get()
             (chemo, pharma, nb_results, duration) = await task_factory(session, kw1, kw2, delay=0)
             logger.info("consume(%s): got %s from job %s after %f", name, nb_results, (chemo, pharma), duration)
-            await asyncio.sleep(max(min_delay - duration, 0))
+            await asyncio.sleep(max(delay - duration, 0))
             res_dict[chemo][pharma] = nb_results
             queue.task_done()
             jobs_done += 1
@@ -223,7 +228,7 @@ async def consume(session, queue, res_dict, task_factory, min_delay=1, name=None
     return jobs_done
 
 
-async def main_queue(queries, mode, parallel):
+async def main_queue(queries, parallel, mode, delay):
     """Create tasks in a queue which is emptied in parallele ensuring at most MAX_REQ_BY_SEC requests per second"""
     jobs = asyncio.Queue()
     res_dict = defaultdict(dict)
@@ -237,7 +242,7 @@ async def main_queue(queries, mode, parallel):
     async with aiohttp.ClientSession(raise_for_status=True) as session:
         consumer_tasks = [
             asyncio.create_task(
-                consume(session, jobs, res_dict, task_factory, min_delay=1, name=i), name=f"consumer-{i}"
+                consume(session, jobs, res_dict, task_factory, delay=delay, name=i), name=f"consumer-{i}"
             )
             for i in range(1, parallel + 1)
         ]
@@ -271,7 +276,7 @@ def sorted_keys(classes, base_only=True):
 # %%
 
 # download_all(mode=args.mode, parallel=args.parallel, , samples=args.samples, all=args.all, write=args.write)
-def download_all(mode="mock", parallel=MAX_REQ_BY_SEC, samples=None, all_classes=False, no_write=False):
+def download_all(mode=DEFAULT_MODE, parallel=DEFAULT_WORKERS, samples=None, all_classes=False, no_write=False, delay=DEFAULT_DELAY_PER_WORKER):
     """Launch the batch of downloads"""
     compounds = get_classes(COMPOUNDS)
     pharmaco = get_classes(PHARMACOLOGY)
@@ -290,7 +295,7 @@ def download_all(mode="mock", parallel=MAX_REQ_BY_SEC, samples=None, all_classes
     # correction bug scopus
     # results = asyncio.run(main_queue(queries, mode=mode))
     loop = asyncio.get_event_loop()
-    main_task = loop.create_task(main_queue(queries=queries, parallel=parallel, mode=mode), name=f"main-queue")
+    main_task = loop.create_task(main_queue(queries=queries, parallel=parallel, mode=mode, delay=delay), name="main-queue")
     results = loop.run_until_complete(main_task)
 
     total_time = time.perf_counter() - main_start_time
@@ -310,22 +315,30 @@ def get_parser():
         "--verbose", "-v", action="store_true", default=False, help="verbosity level set to DEBUG, default is INFO"
     )
     arg_parser.add_argument(
-        "--mode", "-m", action="store", default="mock", help="download mode: 'mock' (default), 'httpbin' or 'scopus'"
+        "--mode", "-m", action="store", default=DEFAULT_MODE, help="download mode: 'mock', 'httpbin' or 'scopus'. Default is {DEFAULT_MODE}"
     )
     arg_parser.add_argument(
         "--parallel",
         "-p",
         type=int,
         action="store",
-        default=MAX_REQ_BY_SEC,
-        help=f"number of parallel consumers, default {MAX_REQ_BY_SEC}",
+        default=DEFAULT_WORKERS,
+        help=f"number of parallel consumers/workers, default {DEFAULT_WORKERS}",
+    )
+    arg_parser.add_argument(
+        "--delay",
+        "-d",
+        type=float,
+        action="store",
+        default=DEFAULT_DELAY_PER_WORKER,
+        help=f"delay between consecutive queries from a worker, default {DEFAULT_DELAY_PER_WORKER}",
     )
     arg_parser.add_argument(
         "--samples",
         "-s",
         type=int,
         action="store",
-        default=None,
+        default=DEFAULT_SAMPLES,
         help="maximum number of queries (random sample), default None (all)",
     )
     arg_parser.add_argument(
@@ -357,10 +370,18 @@ if __name__ == "__main__":
     logger.setLevel(LEVEL)
 
     download_all(
-        mode=args.mode, parallel=args.parallel, samples=args.samples, all_classes=args.all, no_write=args.no_write
+        mode=args.mode,
+        parallel=args.parallel,
+        samples=args.samples,
+        all_classes=args.all,
+        no_write=args.no_write,
+        delay=args.delay,
     )
     # pass
 
 # if __name__ == "__main__":
 #     asyncio.run(run_async_query("phenolic compound", "chronic disease", 0))
 # 38 articles et 69 au total
+
+# py .\downloader.py --mode httpbin --no-write -p 10
+# py .\downloader.py --mode httpbin --no-write --delay 0.0 --parallel 55 --samples 100 --all
