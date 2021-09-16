@@ -18,7 +18,7 @@ from typing import Tuple
 
 import aiohttp
 import certifi
-import pandas as pd
+import numpy as np
 
 logging.basicConfig()
 logger = logging.getLogger("scopus_api")
@@ -276,7 +276,14 @@ def sorted_keys(classes, base_only=True):
 # %%
 
 # download_all(mode=args.mode, parallel=args.parallel, , samples=args.samples, all=args.all, write=args.write)
-def download_all(mode=DEFAULT_MODE, parallel=DEFAULT_WORKERS, samples=None, all_classes=False, no_write=False, delay=DEFAULT_DELAY_PER_WORKER):
+def download_all(
+    mode=DEFAULT_MODE,
+    parallel=DEFAULT_WORKERS,
+    samples=None,
+    all_classes=False,
+    no_write=False,
+    delay=DEFAULT_DELAY_PER_WORKER,
+):
     """Launch the batch of downloads"""
     compounds = get_classes(COMPOUNDS)
     pharmaco = get_classes(PHARMACOLOGY)
@@ -295,7 +302,9 @@ def download_all(mode=DEFAULT_MODE, parallel=DEFAULT_WORKERS, samples=None, all_
     # correction bug scopus
     # results = asyncio.run(main_queue(queries, mode=mode))
     loop = asyncio.get_event_loop()
-    main_task = loop.create_task(main_queue(queries=queries, parallel=parallel, mode=mode, delay=delay), name="main-queue")
+    main_task = loop.create_task(
+        main_queue(queries=queries, parallel=parallel, mode=mode, delay=delay), name="main-queue"
+    )
     results = loop.run_until_complete(main_task)
 
     total_time = time.perf_counter() - main_start_time
@@ -308,6 +317,30 @@ def download_all(mode=DEFAULT_MODE, parallel=DEFAULT_WORKERS, samples=None, all_
         logger.info("WRITTEN %s", output_filename)
 
 
+def load_results(filename: Path, *, chemo_cls_nb, pharm_cls_nb, pharm_nb):
+    """Loads chemical compounds / pharmacological activity matrice from SCOPUS"""
+    logger.debug("load_results(%s)", filename)
+    usecols = range(2, pharm_nb + 2)
+    full_matrix = np.loadtxt(filename, dtype=np.int32, delimiter=";", skiprows=2, encoding="utf-8", usecols=usecols)
+
+    logger.debug("%i chemo classes", chemo_cls_nb)
+    logger.debug("%i pharm classes", pharm_cls_nb)
+    # divide the full matrix into 4 quarter according to the
+    # category of subjects : classes or base subject
+    cls_cls = full_matrix[:chemo_cls_nb:, :pharm_cls_nb:]
+    cls_sub = full_matrix[:chemo_cls_nb:, pharm_cls_nb::]
+    sub_cls = full_matrix[chemo_cls_nb::, :pharm_cls_nb:]
+    sub_sub = full_matrix[chemo_cls_nb::, pharm_cls_nb::]
+    logger.info("dimensions of matrices %s %s %s %s", *map(lambda x: x.shape, [cls_cls, cls_sub, sub_cls, sub_sub]))
+    # INFO:scopus_api:dimensions of matrices (5, 11) (5, 28) (53, 11) (53, 28)
+    # 5*11 + 5*29 + 53*11 + 53*29 = 2320 = 58 * 40
+
+    return [
+        [cls_cls, cls_sub],
+        [sub_cls, sub_sub],
+    ]
+
+
 def get_parser():
     """argparse configuration"""
     arg_parser = argparse.ArgumentParser(description="Scopus downloader")
@@ -315,7 +348,11 @@ def get_parser():
         "--verbose", "-v", action="store_true", default=False, help="verbosity level set to DEBUG, default is INFO"
     )
     arg_parser.add_argument(
-        "--mode", "-m", action="store", default=DEFAULT_MODE, help="download mode: 'mock', 'httpbin' or 'scopus'. Default is {DEFAULT_MODE}"
+        "--mode",
+        "-m",
+        action="store",
+        default=DEFAULT_MODE,
+        help="download mode: 'mock', 'httpbin' or 'scopus'. Default is {DEFAULT_MODE}",
     )
     arg_parser.add_argument(
         "--parallel",

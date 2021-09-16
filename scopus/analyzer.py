@@ -2,11 +2,7 @@
 
 # pylint: disable=unused-import
 # %%
-import csv
-import time
 import logging
-import random
-
 from collections import defaultdict
 from pathlib import Path
 from typing import Tuple
@@ -18,7 +14,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 
-from downloader import BASE_CLASS, get_classes, COMPOUNDS, PHARMACOLOGY, sorted_keys
+from downloader import BASE_CLASS, get_classes, COMPOUNDS, PHARMACOLOGY, sorted_keys, load_results
 
 logging.basicConfig()
 logger = logging.getLogger("scopus_api")
@@ -33,39 +29,15 @@ CHEMO_CLS_NB = sum(1 for cls in CHEMO_MAP.values() if cls == BASE_CLASS)
 PHARM_CLS_NB = sum(1 for cls in PHARM_MAP.values() if cls == BASE_CLASS)
 
 
-def load_results(filename: Path):
-    """Loads chemical compounds / pharmacological activity matrice from SCOPUS"""
-    logger.debug("load_results(%s)", filename)
-    usecols = range(2, len(PHARM_MAP) + 2)
-    full_matrix = np.loadtxt(filename, dtype=np.int32, delimiter=";", skiprows=2, encoding="utf-8", usecols=usecols)
-    chemo_cls_nb = CHEMO_CLS_NB
-    pharm_cls_nb = PHARM_CLS_NB
-
-    logger.debug("%i chemo classes", chemo_cls_nb)
-    logger.debug("%i pharm classes", pharm_cls_nb)
-    # divide the full matrix into 4 quarter according to the
-    # category of subjects : classes or base subject
-    cls_cls = full_matrix[:chemo_cls_nb:, :pharm_cls_nb:]
-    cls_sub = full_matrix[:chemo_cls_nb:, pharm_cls_nb::]
-    sub_cls = full_matrix[chemo_cls_nb::, :pharm_cls_nb:]
-    sub_sub = full_matrix[chemo_cls_nb::, pharm_cls_nb::]
-    logger.info("dimensions of matrices %s %s %s %s", *map(lambda x: x.shape, [cls_cls, cls_sub, sub_cls, sub_sub]))
-    # INFO:scopus_api:dimensions of matrices (5, 11) (5, 28) (53, 11) (53, 28)
-    # 5*11 + 5*29 + 53*11 + 53*29 = 2320 = 58 * 40
-
-    return [
-        [cls_cls, cls_sub],
-        [sub_cls, sub_sub],
-    ]
-
-
 chemo_cls = sorted_keys(CHEMO_MAP, base_only=True)
 pharm_cls = sorted_keys(PHARM_MAP, base_only=True)
 chemo_sub = sorted_keys(CHEMO_MAP, base_only=False)[CHEMO_CLS_NB::]
 pharm_sub = sorted_keys(PHARM_MAP, base_only=False)[PHARM_CLS_NB::]
 
 
-citations = load_results(INPUT_MATRIX)
+citations = load_results(
+    INPUT_MATRIX, chemo_cls_nb=len(chemo_cls), pharm_cls_nb=len(pharm_cls), pharm_nb=len(PHARM_MAP)
+)
 [[chemo_cls_pharm_cls, chemo_cls_pharm_sub], [chemo_sub_pharm_cls, chemo_sub_pharm_sub]] = citations
 
 
@@ -117,7 +89,6 @@ sns.histplot(
 )
 
 # %%
-
 # matrice des correlation, Pearson par défaut
 
 # pharm X pharm
@@ -126,7 +97,7 @@ df_sub_sub.corr()
 # chemo X chemo
 df_sub_sub.transpose().corr()
 
-# %%
+
 f, ax = plt.subplots(figsize=(10, 8))
 ax = sns.heatmap(df_sub_sub.corr())
 
@@ -158,15 +129,47 @@ sns.histplot(
     weights="nb",
 )
 
-# %%
-# on va randomiser les classes pharmaco
-# hue_order = pharm_sub.copy()
-# random.shuffle(hue_order)
-
 
 # %%
 f, ax = plt.subplots(figsize=(10, 8))
 corr = df_sub_sub_n.corr()
 mask = np.triu(np.ones_like(corr))
 
-ax = sns.heatmap(corr, mask = mask)
+ax = sns.heatmap(corr, mask=mask)
+
+# %%
+
+from sklearn.cluster import SpectralClustering
+
+NB_CLUSTERS = 5
+
+sc = SpectralClustering(NB_CLUSTERS, affinity="precomputed", n_init=100, assign_labels="discretize")
+corr = abs(df_sub_sub.corr())
+clusters = sc.fit_predict(corr)
+positions = np.argsort(clusters)
+
+
+# %%
+
+group = defaultdict(list)
+for i, name in enumerate(list(corr.index)):
+    group[clusters[i]].append(name)
+
+
+# %%
+
+
+reorg = corr.values[positions][positions]
+corr.update(reorg)
+# %%
+
+# np.argsort(clusters)
+# corr["cluster"] = clusters
+# df = corr.sort_values(by=["cluster"]).drop(axis = 1, labels=["cluster"])
+
+f, ax = plt.subplots(figsize=(10, 8))
+ax = sns.heatmap(reorg, mask=np.triu(np.ones_like(reorg)))
+
+
+# activité allelopathique : la plante pour elle mêem VS pharmaco : l'usage humain
+# => deux catégories
