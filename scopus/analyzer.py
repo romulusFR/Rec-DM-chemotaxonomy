@@ -75,7 +75,7 @@ pdf_sub_sub.rename(columns={"index": "compound"}, inplace=True)
 # l'histogramme absolu
 f, ax = plt.subplots(figsize=(12, 6))
 sns.despine(f)
-plt.xticks(rotation=90 * 0.75)
+
 
 
 sns.histplot(
