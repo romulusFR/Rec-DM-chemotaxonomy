@@ -124,6 +124,6 @@ if __name__ == "__main__":
     logger.info("Start at %s", datetime.now())
     chemo_activities = load_chemo_activities(CHEMO_ACTIVITIES_FILENAME)
     now = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    output_filename = OUTPUT_DIR / f"activity_{now}.csv"
+    output_filename = OUTPUT_DIR / f"activities_{now}.csv"
     write_chemo_activities(output_filename, chemo_activities)
     logger.info("Done at %s", datetime.now())
