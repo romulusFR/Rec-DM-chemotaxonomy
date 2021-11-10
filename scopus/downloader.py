@@ -18,7 +18,9 @@ from typing import Tuple
 
 import aiohttp
 import certifi
-import numpy as np
+
+from loader import Dataset, load_chemo_activities, write_chemo_activities
+
 
 logging.basicConfig()
 logger = logging.getLogger("scopus_api")
@@ -30,22 +32,9 @@ logger.setLevel(logging.DEBUG)
 # https://docs.aiohttp.org/en/stable/client_advanced.html
 
 
-# SAMPLES / TESTS
-CHEMISTRY = ["alkaloid", "polyphenol", "coumarin"]
-ACTIVITIES = ["antiinflammatory", "anticoagulant", "cancer"]
-RESULTS = {"acridine": {"anticancer": "2790"}, "pyridine": {"toxicant": "1904"}, "tetracycline": {"repulsive": "4598"}}
-QUERIES = list(product(CHEMISTRY, ACTIVITIES))
-ERROR_RATE = 1  # (in %)
-
-# DATASETS
-COMPOUNDS = Path("data") / "compounds.csv"
-PHARMACOLOGY = Path("data") / "pharmacology.csv"
-BASE_CLASS = "*"
-
 # OUTPUT
 OUTPUT_DIR = Path("results")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-CSV_PARAMS = {"delimiter": ";", "quotechar": '"'}
 
 # API Scopus
 API_KEY = {"X-ELS-APIKey": "7047b3a8cf46d922d5d5ca71ff531b7d"}
@@ -57,68 +46,6 @@ DEFAULT_WORKERS = 8
 DEFAULT_DELAY_PER_WORKER = 1.0
 DEFAULT_SAMPLES = None
 DEFAULT_MODE = "mock"
-
-
-def get_classes(filename):
-    """Loads classes from a csv file with format (parent, child) and return a dict with ALL names"""
-    logger.debug("get_classes(%s)", filename)
-    classes = {}
-    with open(filename, encoding="utf-8") as csvfile:
-        reader = csv.reader(csvfile, **CSV_PARAMS)
-        for (parent, child) in reader:
-            classes[standardize(child)] = standardize(parent)
-
-    # add parents classes to the dict, with a default parent for each one
-    for value in set(classes.values()):
-        classes[value] = BASE_CLASS
-    return classes
-
-
-# BUG : le type  dict[Tuple[str, str], Tuple[int, float]] est faux
-# NOTE : rows et cols sont surtout pour l'ordreet les cases vides si besoin
-def write_results(res_dict, rows, cols, row_classes, col_classes, filename):
-    """Store result dict"""
-    logger.debug("write_results(%i, %s)", len(res_dict), filename)
-    with open(filename, "w", newline="", encoding="utf-8") as csvfile:
-        writer = csv.writer(csvfile, **CSV_PARAMS)
-        # pharmacological activity classes
-        writer.writerow(("", "", *(col_classes[col] for col in cols)))
-        # pharmacological activities
-        writer.writerow(("", "", *cols))
-        # write compounds, one by line
-        for row in rows:
-            values = [res_dict[row].get(col, -1) for col in cols]  # type:ignore
-            writer.writerow((row_classes[row], row, *values))
-
-
-def load_results(filename: Path, *, chemo_cls_nb, pharm_cls_nb, pharm_nb):
-    """Loads chemical compounds / pharmacological activity matrice from SCOPUS"""
-    logger.debug("load_results(%s)", filename)
-    usecols = range(2, pharm_nb + 2)
-    full_matrix = np.loadtxt(filename, dtype=np.int32, delimiter=";", skiprows=2, encoding="utf-8", usecols=usecols)
-
-    logger.debug("%i chemo classes", chemo_cls_nb)
-    logger.debug("%i pharm classes", pharm_cls_nb)
-    # divide the full matrix into 4 quarter according to the
-    # category of subjects : classes or base subject
-    cls_cls = full_matrix[:chemo_cls_nb:, :pharm_cls_nb:]
-    cls_sub = full_matrix[:chemo_cls_nb:, pharm_cls_nb::]
-    sub_cls = full_matrix[chemo_cls_nb::, :pharm_cls_nb:]
-    sub_sub = full_matrix[chemo_cls_nb::, pharm_cls_nb::]
-    logger.info("dimensions of matrices %s %s %s %s", *map(lambda x: x.shape, [cls_cls, cls_sub, sub_cls, sub_sub]))
-    # INFO:scopus_api:dimensions of matrices (5, 11) (5, 28) (53, 11) (53, 28)
-    # 5*11 + 5*29 + 53*11 + 53*29 = 2320 = 58 * 40
-
-    return [
-        [cls_cls, cls_sub],
-        [sub_cls, sub_sub],
-    ]
-
-
-
-def standardize(string: str) -> str:
-    """Standardize strings"""
-    return string.strip().lower()
 
 
 # ( KEY ( terpenoid  OR  terpene ) AND KEY ( stimulant ) ) : 32
@@ -139,31 +66,6 @@ def build_search_query(keywords1, keywords2):
     }
 
 
-async def main_gather_all(pairs, mode):
-    """OLD : Create tasks sequentially with throttling : one query every 1/MAX_REQ_BY_SEC second"""
-    coros = []
-    # pick the query mode
-    task_factory = MODES.get(mode, MODES["fake"])
-    # build all the tasks, each one sending an http network request over the network after some delay
-    # delay is incremented by 1/MAX_REQ_BY_SEC
-    async with aiohttp.ClientSession() as session:
-        for i, (chemo, pharma) in enumerate(pairs):
-            delay = i * 1 / DEFAULT_WORKERS
-            task = asyncio.create_task(task_factory(session, chemo, pharma, delay=delay))
-            coros.append(task)
-        logger.info(
-            "main: %i jobs created, estimated duration %f sec",
-            len(pairs),
-            len(pairs) / DEFAULT_WORKERS + BASE_RESPONSE_TIME,
-        )
-        res = await asyncio.gather(*coros)
-
-    res_dict = defaultdict(dict)
-    for (chemo, pharma, nb_results, _) in res:
-        res_dict[chemo][pharma] = nb_results
-    return res_dict
-
-
 async def query_fake(_, keyword1, keyword2, *, delay=0):
     """Fake query tool without network, for test purpose"""
     results_nb = randint(1, 10000)
@@ -177,10 +79,10 @@ async def query_fake(_, keyword1, keyword2, *, delay=0):
     return (keyword1, keyword2, results_nb, elapsed)
 
 
-async def query_httpbin(session, keyword1, keyword2, *, delay=0):
+async def query_httpbin(session, keyword1, keyword2, *, delay=0, error_rate=1):
     """Fake query tool WITH network on httpbin, for test purpose"""
     # simule 1% d'erreur
-    if randint(1, 100) <= ERROR_RATE:
+    if randint(1, 100) <= error_rate:
         url = "http://httpbin.org/status/429"
     else:
         url = "http://httpbin.org/anything"
@@ -292,35 +194,26 @@ async def main_queue(queries, parallel, mode, delay):
     return res_dict
 
 
-def sorted_keys(classes, base_only=True):
-    """Ensure that parents classes are first in order, and that children are classes-wise ordered alphabeticaly"""
-    return sorted(
-        (com for com, cls in classes.items() if not base_only or cls == BASE_CLASS), key=lambda x: (classes[x], x)
-    )
-
-
 # %%
 
 # download_all(mode=args.mode, parallel=args.parallel, , samples=args.samples, all=args.all, write=args.write)
 def download_all(
+    dataset: Dataset,
     mode=DEFAULT_MODE,
     parallel=DEFAULT_WORKERS,
     samples=None,
-    all_classes=False,
-    no_write=False,
     delay=DEFAULT_DELAY_PER_WORKER,
+    no_write=False,
 ):
     """Launch the batch of downloads"""
-    compounds = get_classes(COMPOUNDS)
-    pharmaco = get_classes(PHARMACOLOGY)
-    compounds_keywords = sorted_keys(compounds, base_only=not all_classes)
-    pharmaco_keywords = sorted_keys(pharmaco, base_only=not all_classes)
+    compounds = dataset.compounds.keys()
+    activities = dataset.activities.keys()
     if samples is None:
-        queries = list(product(compounds_keywords, pharmaco_keywords))
+        queries = list(product(compounds, activities))
     else:
-        queries = sample(list(product(compounds_keywords, pharmaco_keywords)), samples)
+        queries = sample(list(product(compounds, activities)), samples)
 
-    logger.info("%i compounds X %i pharmacology = %i", len(compounds_keywords), len(pharmaco_keywords), len(queries))
+    logger.info("%i compounds X %i pharmacology = %i", len(compounds), len(activities), len(queries))
 
     main_start_time = time.perf_counter()
     logger.info("START")
@@ -332,30 +225,34 @@ def download_all(
         main_queue(queries=queries, parallel=parallel, mode=mode, delay=delay), name="main-queue"
     )
     results = loop.run_until_complete(main_task)
+    dataset.data = results
 
     total_time = time.perf_counter() - main_start_time
     logger.info("DONE in %fs", total_time)
 
     if not no_write:
-        now = datetime.now().strftime("%Y-%m-%d_%Hh%Mm%Ss")
-        output_filename = OUTPUT_DIR / f"activity_{now}.csv"
-        write_results(results, compounds_keywords, pharmaco_keywords, compounds, pharmaco, output_filename)
+        now = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        output_filename = OUTPUT_DIR / f"activities_{now}.csv"
+        write_chemo_activities(output_filename, dataset)
         logger.info("WRITTEN %s", output_filename)
-
 
 
 def get_parser():
     """argparse configuration"""
     arg_parser = argparse.ArgumentParser(description="Scopus downloader")
     arg_parser.add_argument(
-        "--verbose", "-v", action="store_true", default=False, help="verbosity level set to DEBUG, default is INFO"
+        "filename",
+        help="file to read chemo activities from",
+    )
+    arg_parser.add_argument(
+        "--verbose", "-v", action="store_true", default=False, help="verbosity level set to DEBUG (default is INFO)"
     )
     arg_parser.add_argument(
         "--mode",
         "-m",
         action="store",
         default=DEFAULT_MODE,
-        help="download mode: 'mock', 'httpbin' or 'scopus'. Default is {DEFAULT_MODE}",
+        help=f"download mode: 'mock', 'httpbin' or 'scopus' (default '{DEFAULT_MODE}')",
     )
     arg_parser.add_argument(
         "--parallel",
@@ -363,7 +260,7 @@ def get_parser():
         type=int,
         action="store",
         default=DEFAULT_WORKERS,
-        help=f"number of parallel consumers/workers, default {DEFAULT_WORKERS}",
+        help=f"number of parallel consumers/workers (default {DEFAULT_WORKERS})",
     )
     arg_parser.add_argument(
         "--delay",
@@ -371,7 +268,7 @@ def get_parser():
         type=float,
         action="store",
         default=DEFAULT_DELAY_PER_WORKER,
-        help=f"delay between consecutive queries from a worker, default {DEFAULT_DELAY_PER_WORKER}",
+        help=f"delay between consecutive queries from a worker (default {DEFAULT_DELAY_PER_WORKER})",
     )
     arg_parser.add_argument(
         "--samples",
@@ -379,14 +276,7 @@ def get_parser():
         type=int,
         action="store",
         default=DEFAULT_SAMPLES,
-        help="maximum number of queries (random sample), default None (all)",
-    )
-    arg_parser.add_argument(
-        "--all",
-        "-a",
-        action="store_true",
-        default=False,
-        help="download both parent categories and children",
+        help="maximum number of queries (random samples) (default all pairs)",
     )
     arg_parser.add_argument(
         "--no-write",
@@ -409,11 +299,12 @@ if __name__ == "__main__":
         LEVEL = logging.INFO
     logger.setLevel(LEVEL)
 
+    dataset = load_chemo_activities(args.filename)
     download_all(
+        dataset,
         mode=args.mode,
         parallel=args.parallel,
         samples=args.samples,
-        all_classes=args.all,
         no_write=args.no_write,
         delay=args.delay,
     )

@@ -117,7 +117,7 @@ def write_chemo_activities(filename: Path, dataset: Dataset):
 
 if __name__ == "__main__":
     INPUT_DIR = Path("data")
-    OUTPUT_DIR = Path("tmp")
+    OUTPUT_DIR = Path("results")
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     CHEMO_ACTIVITIES_FILENAME = INPUT_DIR / "activities.csv"
 
