@@ -17,21 +17,11 @@ logging.basicConfig()
 logger = logging.getLogger("scopus_api")
 logger.setLevel(logging.INFO)
 
-# DATASETS
-INPUT_DIR = Path("data")
-OUTPUT_DIR = Path("tmp")
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-
-CHEMO_ACTIVITIES_FILENAME = INPUT_DIR / "activities.csv"
+CSV_PARAMS = {"delimiter": ";", "quotechar": '"'}
 BASE_CLASS = "*"
 NO_DATA = None
 
-CSV_PARAMS = {"delimiter": ";", "quotechar": '"'}
-
-
 # TODO : see if pandas with both hierarchical indexes and attributes is ok
-
-
 @dataclass
 class Dataset:
     """Data structure to store cehmo activities
@@ -124,7 +114,13 @@ def write_chemo_activities(filename: Path, dataset: Dataset):
     logger.info("write_chemo_activities(%s) written", filename)
 
 # test : loads and then rewrites
+
 if __name__ == "__main__":
+    INPUT_DIR = Path("data")
+    OUTPUT_DIR = Path("tmp")
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    CHEMO_ACTIVITIES_FILENAME = INPUT_DIR / "activities.csv"
+
     logger.info("Start at %s", datetime.now())
     chemo_activities = load_chemo_activities(CHEMO_ACTIVITIES_FILENAME)
     now = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
