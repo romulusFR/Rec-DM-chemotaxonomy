@@ -74,8 +74,9 @@ def get_classes(filename):
     return classes
 
 
+# BUG : le type  dict[Tuple[str, str], Tuple[int, float]] est faux
 # NOTE : rows et cols sont surtout pour l'ordreet les cases vides si besoin
-def write_results(res_dict: dict[Tuple[str, str], Tuple[int, float]], rows, cols, row_classes, col_classes, filename):
+def write_results(res_dict, rows, cols, row_classes, col_classes, filename):
     """Store result dict"""
     logger.debug("write_results(%i, %s)", len(res_dict), filename)
     with open(filename, "w", newline="", encoding="utf-8") as csvfile:
@@ -88,6 +89,31 @@ def write_results(res_dict: dict[Tuple[str, str], Tuple[int, float]], rows, cols
         for row in rows:
             values = [res_dict[row].get(col, -1) for col in cols]  # type:ignore
             writer.writerow((row_classes[row], row, *values))
+
+
+def load_results(filename: Path, *, chemo_cls_nb, pharm_cls_nb, pharm_nb):
+    """Loads chemical compounds / pharmacological activity matrice from SCOPUS"""
+    logger.debug("load_results(%s)", filename)
+    usecols = range(2, pharm_nb + 2)
+    full_matrix = np.loadtxt(filename, dtype=np.int32, delimiter=";", skiprows=2, encoding="utf-8", usecols=usecols)
+
+    logger.debug("%i chemo classes", chemo_cls_nb)
+    logger.debug("%i pharm classes", pharm_cls_nb)
+    # divide the full matrix into 4 quarter according to the
+    # category of subjects : classes or base subject
+    cls_cls = full_matrix[:chemo_cls_nb:, :pharm_cls_nb:]
+    cls_sub = full_matrix[:chemo_cls_nb:, pharm_cls_nb::]
+    sub_cls = full_matrix[chemo_cls_nb::, :pharm_cls_nb:]
+    sub_sub = full_matrix[chemo_cls_nb::, pharm_cls_nb::]
+    logger.info("dimensions of matrices %s %s %s %s", *map(lambda x: x.shape, [cls_cls, cls_sub, sub_cls, sub_sub]))
+    # INFO:scopus_api:dimensions of matrices (5, 11) (5, 28) (53, 11) (53, 28)
+    # 5*11 + 5*29 + 53*11 + 53*29 = 2320 = 58 * 40
+
+    return [
+        [cls_cls, cls_sub],
+        [sub_cls, sub_sub],
+    ]
+
 
 
 def standardize(string: str) -> str:
@@ -316,29 +342,6 @@ def download_all(
         write_results(results, compounds_keywords, pharmaco_keywords, compounds, pharmaco, output_filename)
         logger.info("WRITTEN %s", output_filename)
 
-
-def load_results(filename: Path, *, chemo_cls_nb, pharm_cls_nb, pharm_nb):
-    """Loads chemical compounds / pharmacological activity matrice from SCOPUS"""
-    logger.debug("load_results(%s)", filename)
-    usecols = range(2, pharm_nb + 2)
-    full_matrix = np.loadtxt(filename, dtype=np.int32, delimiter=";", skiprows=2, encoding="utf-8", usecols=usecols)
-
-    logger.debug("%i chemo classes", chemo_cls_nb)
-    logger.debug("%i pharm classes", pharm_cls_nb)
-    # divide the full matrix into 4 quarter according to the
-    # category of subjects : classes or base subject
-    cls_cls = full_matrix[:chemo_cls_nb:, :pharm_cls_nb:]
-    cls_sub = full_matrix[:chemo_cls_nb:, pharm_cls_nb::]
-    sub_cls = full_matrix[chemo_cls_nb::, :pharm_cls_nb:]
-    sub_sub = full_matrix[chemo_cls_nb::, pharm_cls_nb::]
-    logger.info("dimensions of matrices %s %s %s %s", *map(lambda x: x.shape, [cls_cls, cls_sub, sub_cls, sub_sub]))
-    # INFO:scopus_api:dimensions of matrices (5, 11) (5, 28) (53, 11) (53, 28)
-    # 5*11 + 5*29 + 53*11 + 53*29 = 2320 = 58 * 40
-
-    return [
-        [cls_cls, cls_sub],
-        [sub_cls, sub_sub],
-    ]
 
 
 def get_parser():
