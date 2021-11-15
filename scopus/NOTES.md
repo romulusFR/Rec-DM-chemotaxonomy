@@ -11,6 +11,8 @@
 
 ### ScienceDirect
 
+Voir <https://github.com/ElsevierDev/elsapy>
+
 - <https://api.elsevier.com/content/search/sciencedirect>
 - <https://datasearch.elsevier.com/api/docs>
 - <https://dev.elsevier.com/documentation/ScopusSearchAPI.wadl>
@@ -189,11 +191,10 @@ For _Scopus Search_, see <https://dev.elsevier.com/api_key_settings.html>
 
 ```json
 {
-    "title": "Articulation Disorders",
-    "filters": {
-      "openAccess": true
-    },
-    "loadedAfter": "2018-06-01T00:00:00Z"
-  }
+  "title": "Articulation Disorders",
+  "filters": {
+    "openAccess": true
+  },
+  "loadedAfter": "2018-06-01T00:00:00Z"
+}
 ```
-
