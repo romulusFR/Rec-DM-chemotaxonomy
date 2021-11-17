@@ -66,7 +66,7 @@ def load_chemo_activities(filename: Path):
         # put {effect : classes} into a dict
         pharma_dict: dict[str, str] = dict(zip(pharma_effects, pharma_classes))
 
-        logger.debug(pharma_dict)
+        # logger.debug(pharma_dict)
 
         chemo_dict: dict[str, str] = {}
         data_dict: dict[str, dict[str, Optional[int]]] = {}
@@ -85,8 +85,8 @@ def load_chemo_activities(filename: Path):
                     val = NO_DATA
                 data_dict[chemo_compound][pharma_effects[idx]] = val
 
-        logger.debug(chemo_dict)
-        logger.debug(pformat(data_dict))
+        # logger.debug(chemo_dict)
+        # logger.debug(pformat(data_dict))
         logger.info("load_chemo_activities('%s') loaded", filename)
         return Dataset(chemo_dict, pharma_dict, data_dict)
 
