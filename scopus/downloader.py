@@ -225,7 +225,7 @@ def download_all(
     parallel=DEFAULT_WORKERS,
     samples=None,
     delay=DEFAULT_DELAY_PER_WORKER,
-    no_write=False,
+    write=False,
 ):
     """Launch the batch of downloads"""
     compounds = dataset.compounds.keys()
@@ -253,7 +253,7 @@ def download_all(
     total_time = time.perf_counter() - main_start_time
     logger.info("all jobs done in %fs", total_time)
 
-    if not no_write:
+    if write:
         now = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         output_filename = OUTPUT_DIR / f"activities_{now}.csv"
         write_chemo_activities(output_filename, dataset)
@@ -302,11 +302,11 @@ def get_parser():
         help="maximum number of queries (random samples) (default all pairs)",
     )
     arg_parser.add_argument(
-        "--no-write",
+        "--write",
         "-w",
         action="store_true",
         default=False,
-        help="do not write results to csv file (default False)",
+        help="do write results to csv file (default False)",
     )
     return arg_parser
 
@@ -328,7 +328,7 @@ if __name__ == "__main__":
         mode=args.mode,
         parallel=args.parallel,
         samples=args.samples,
-        no_write=args.no_write,
+        write=args.write,
         delay=args.delay,
     )
     # pass
