@@ -8,13 +8,14 @@ import csv
 import logging
 import ssl
 import time
+from dataclasses import dataclass, field
 from collections import defaultdict
 from datetime import datetime
-from itertools import product
+from itertools import product, chain
 from pathlib import Path
-from pprint import pprint
+from pprint import pprint, pformat
 from random import randint, sample
-from typing import Tuple
+from typing import Tuple, List
 from os import environ
 
 from dotenv import load_dotenv
@@ -58,37 +59,49 @@ DEFAULT_MODE = "fake"
 # ( KEY ( terpenoid) OR KEY (terpene )) AND KEY ( stimulant ) : 32
 # ( KEY ( terpenoid) ) AND KEY ( stimulant ) : 8
 # ( KEY ( terpene) ) AND KEY ( stimulant ) : 24
-def build_search_query(*keywords):
-    """transform two keywords into a SCOPUS API query string. Splits keywords as OR subqueries if needed.
-    Variadic parameter"""
+def build_dnf_query(*disjuncts):
+    """transform lists keywords into a SCOPUS API query string.
+       Splits keywords as OR subqueries if needed.
+       Variadic parameter : the conjuncts. Each parameter is a list of disjuncts.
 
-    def slashes_to_or(string):
-        return " OR ".join(string.split("/"))
+       Example :
 
-    disjuncts = [slashes_to_or(kws) for kws in keywords]
+       build_dnf_query(["pyridine", "oxazole", "terpenoid / terpene"], ["toxicity", "cancer/death"])
+
+       Creates the following query string
+
+       {'query': '( KEY ( pyridine OR oxazole OR terpenoid OR terpene ) AND KEY ( toxicity OR cancer OR death ) ) AND ( DOCTYPE( "ar" ) )',
+    'count': 1}
+
+    """
+
+    clauses = [
+        " OR ".join(keyword.strip() for coumpound_keyword in disjunct for keyword in coumpound_keyword.split("/"))
+        for disjunct in disjuncts
+    ]
     # KEY ( {disjunct1} ) AND KEY ( {disjunct2} )
-    clauses = " AND ".join(f"KEY ( {clause} )" for clause in disjuncts)
+    clausal_form = " AND ".join(f"KEY ( {clause} )" for clause in clauses if len(clause))
 
     return {
-        "query": f'( {clauses} ) AND ( DOCTYPE( "ar" ) )',
+        "query": f'( {clausal_form} ) AND ( DOCTYPE( "ar" ) )',
         "count": 1,
     }
 
 
-async def query_fake(_, keywords, *, delay=0):
+async def query_fake(_, kw_clauses, *, delay=0):
     """Fake query tool without network, for test purpose"""
     results_nb = randint(1, 10000)
     await asyncio.sleep(delay)
     start_time = time.perf_counter()
-    logger.debug("query_fake(%s): launching at %s", keywords, start_time)
-    logger.debug("           %s", build_search_query(*keywords)["query"])
+    logger.debug("query_fake(%s): launching at %s", kw_clauses, start_time)
+    logger.debug("           %s", build_dnf_query(*kw_clauses)["query"])
 
     await asyncio.sleep(randint(1, 1000) / 1000)
     elapsed = time.perf_counter() - start_time
-    return (keywords, results_nb, elapsed)
+    return (kw_clauses, results_nb, elapsed)
 
 
-async def query_httpbin(session, keywords, *, delay=0, error_rate=1):
+async def query_httpbin(session, kw_clauses, *, delay=0, error_rate=1):
     """Fake query tool WITH network on httpbin, for test purpose"""
     # simule 1% d'erreur
     if randint(1, 100) <= error_rate:
@@ -97,10 +110,10 @@ async def query_httpbin(session, keywords, *, delay=0, error_rate=1):
         url = "http://httpbin.org/anything"
     data = {"answer": randint(1, 10000)}
     results_nb = -1
-    query = build_search_query(*keywords)
+    query = build_dnf_query(*kw_clauses)
     await asyncio.sleep(delay)
     start_time = time.perf_counter()
-    logger.debug("query_httpbin(%s): launching at %s", keywords, start_time)
+    logger.debug("query_httpbin(%s): launching at %s", kw_clauses, start_time)
     logger.debug("           %s", query)
 
     try:
@@ -108,36 +121,36 @@ async def query_httpbin(session, keywords, *, delay=0, error_rate=1):
             json = await resp.json()
             # args = json["args"]["query"]
             results_nb = int(json["form"]["answer"])
-            logger.debug("query_httpbin(%s): results_nb=%i", keywords, results_nb)
+            logger.debug("query_httpbin(%s): results_nb=%i", kw_clauses, results_nb)
     except aiohttp.ClientError as err:  # aiohttp.ClientError
         logger.error(err)
         results_nb = -1
     finally:
         elapsed = time.perf_counter() - start_time
-    return (keywords, results_nb, elapsed)
+    return (kw_clauses, results_nb, elapsed)
 
 
-async def query_scopus(session, keywords, *, delay=0):
+async def query_scopus(session, kw_clauses, *, delay=0):
     """SCOPUS query tool: return the number of article papers having two sets of keywords. Delay is in sec"""
     scopus_url = "https://api.elsevier.com/content/search/scopus"
     results_nb = -1
-    query = build_search_query(*keywords)
+    query = build_dnf_query(*kw_clauses)
     await asyncio.sleep(delay)
     start_time = time.perf_counter()
-    logger.debug("query_scopus(%s) @%s", keywords, start_time)
+    logger.debug("query_scopus(%s) @%s", kw_clauses, start_time)
     logger.debug("           %s", query)
     try:
         async with session.get(scopus_url, params=query, headers=API_KEY, ssl=SSL_CONTEXT) as resp:
             logger.debug("X-RateLimit-Remaining=%s", resp.headers.get("X-RateLimit-Remaining", None))
             json = await resp.json()
             results_nb = int(json["search-results"]["opensearch:totalResults"], 10)
-            logger.debug("query_scopus(%s): results_nb=%i", keywords, results_nb)
+            logger.debug("query_scopus(%s): results_nb=%i", kw_clauses, results_nb)
     except aiohttp.ClientError as err:
         logger.error(err)
         results_nb = -1
     finally:
         elapsed = time.perf_counter() - start_time
-    return (keywords, results_nb, elapsed)
+    return (kw_clauses, results_nb, elapsed)
 
 
 # query modes : one fake, one fake over network, one true
@@ -215,8 +228,59 @@ async def main_queue(queries, parallel, mode, delay):
 
     return res_dict
 
+def splits_slashes(coumpound_keyword) : 
+    """Divides and normalizes a string along slashes (/) to a tuples of strings
+    
+    examples
 
-# %%
+    splits_slashes("triterpene") == ('triterpene',)
+    splits_slashes("terpenoid / terpene") == ('terpenoid', 'terpene')
+    """
+    return tuple(keyword.strip() for keyword in coumpound_keyword.split("/"))
+
+@dataclass
+class ScopusQuery(repr=False):
+    any_compounds : Tuple[str]
+    but_not_compounds : Tuple[str]
+    any_activities : Tuple[str]
+    but_not_activities : Tuple[str]
+    
+    def to_scopus(self) -> str:
+    #     clauses = [
+    #     " OR ".join(keyword.strip() for coumpound_keyword in disjunct for keyword in coumpound_keyword.split("/"))
+    #     for disjunct in disjuncts
+    # ]
+    # # KEY ( {disjunct1} ) AND KEY ( {disjunct2} )
+    # clausal_form = " AND ".join(f"KEY ( {clause} )" for clause in clauses if len(clause))
+
+        return {
+            "query": f'DOCTYPE( "ar" ) AND ( {clausal_form} ) ',
+            "count": 1,
+        }
+
+def generate_all_dnf(data: Dataset) :
+
+    compounds: List[str] = list(data.compounds.keys())
+    activities: List[str] = list(data.activities.keys())
+    any_compound = chain(splits_slashes(compound) for compound in compounds)
+    any_activity = chain(splits_slashes(activity) for activity in activities)
+
+    queries = []
+    # grand total
+    queries.push( ()  )
+    # # marginal sums : rows
+    
+    # queries += [((splits_slashes(compound,), tuple(any_activity)), ()) for compound in compounds]
+    # # marginal sums : cols
+    # queries += [((tuple(compounds), (activity,)), ()) for activity in activities]
+
+    # queries = [[[compound], [activity]] for compound in compounds for activity in activities]
+    # queries += [[compounds], [activities]]
+    # queries += [[compounds], [activities]]
+    # queries += [[compounds, activities]]
+    logger.debug(f"generate_all_dnf({compounds}, {activities}) =\n{pformat(queries)}")
+    return queries
+
 
 # download_all(mode=args.mode, parallel=args.parallel, , samples=args.samples, all=args.all, write=args.write)
 def download_all(
@@ -228,14 +292,14 @@ def download_all(
     write=False,
 ):
     """Launch the batch of downloads"""
-    compounds = dataset.compounds.keys()
-    activities = dataset.activities.keys()
-    queries = list(product(compounds, activities))
 
+    # here, constructs all pairs {(c, a) | c in compounds, a in activity}
+    # list(product(compounds, activities))
+    queries = generate_all_dnf(dataset)
     if samples is not None:
-        queries = sample(queries, samples) # [(c,) for c in compounds]
+        queries = sample(queries, samples)  # [(c,) for c in compounds]
 
-    logger.info("%i compounds X %i pharmacology = %i", len(compounds), len(activities), len(queries))
+    logger.info("%i compounds X %i pharmacology = %i", len(dataset.compounds), len(dataset.activities), len(queries))
 
     main_start_time = time.perf_counter()
     logger.info("starting filling queue with jobs")
@@ -260,6 +324,7 @@ def download_all(
         logger.info("WRITTEN %s", output_filename)
 
 
+# %%
 def get_parser():
     """argparse configuration"""
     arg_parser = argparse.ArgumentParser(description="Scopus downloader")
@@ -322,9 +387,9 @@ if __name__ == "__main__":
         LEVEL = logging.INFO
     logger.setLevel(LEVEL)
 
-    dataset = load_chemo_activities(args.filename)
+    dataset_content = load_chemo_activities(args.filename)
     download_all(
-        dataset,
+        dataset=dataset_content,
         mode=args.mode,
         parallel=args.parallel,
         samples=args.samples,
@@ -339,3 +404,7 @@ if __name__ == "__main__":
 
 # py .\downloader.py --mode httpbin --no-write -p 10
 # py .\downloader.py --mode httpbin --no-write --delay 0.0 --parallel 55 --samples 100 --all
+
+if False:
+    dataset_content = load_chemo_activities("data/tests.csv")
+    generate_all_dnf(dataset_content)
