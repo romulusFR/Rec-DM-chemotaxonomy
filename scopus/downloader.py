@@ -15,7 +15,7 @@ from itertools import product, chain
 from pathlib import Path
 from pprint import pprint, pformat
 from random import randint, sample
-from typing import Tuple, List
+from typing import Tuple, List, Optional
 from os import environ
 
 from dotenv import load_dotenv
@@ -228,59 +228,49 @@ async def main_queue(queries, parallel, mode, delay):
 
     return res_dict
 
-def splits_slashes(coumpound_keyword) : 
-    """Divides and normalizes a string along slashes (/) to a tuples of strings
-    
-    examples
 
-    splits_slashes("triterpene") == ('triterpene',)
-    splits_slashes("terpenoid / terpene") == ('terpenoid', 'terpene')
-    """
-    return tuple(keyword.strip() for keyword in coumpound_keyword.split("/"))
+class ScopusQueryBuilder(repr=False):
+    @staticmethod
+    def splits_slashes(coumpound_keyword):
+        """Divides and normalizes a string along slashes (/) to a tuples of strings
 
-@dataclass
-class ScopusQuery(repr=False):
-    any_compounds : Tuple[str]
-    but_not_compounds : Tuple[str]
-    any_activities : Tuple[str]
-    but_not_activities : Tuple[str]
-    
-    def to_scopus(self) -> str:
-    #     clauses = [
-    #     " OR ".join(keyword.strip() for coumpound_keyword in disjunct for keyword in coumpound_keyword.split("/"))
-    #     for disjunct in disjuncts
-    # ]
-    # # KEY ( {disjunct1} ) AND KEY ( {disjunct2} )
-    # clausal_form = " AND ".join(f"KEY ( {clause} )" for clause in clauses if len(clause))
+        examples
 
+        splits_slashes("triterpene") == ('triterpene',)
+        splits_slashes("terpenoid / terpene") == ('terpenoid', 'terpene')
+        """
+        return [keyword.strip() for keyword in coumpound_keyword.split("/")]
+
+    @staticmethod
+    def wraps_query(clausal_form):
         return {
             "query": f'DOCTYPE( "ar" ) AND ( {clausal_form} ) ',
             "count": 1,
         }
 
-def generate_all_dnf(data: Dataset) :
+    def __init__(self, compounds: list[str], activities: list[str]) -> None:
+        self.compounds = compounds
+        self.activities = activities
+        self.normalized_compounds = [ScopusQueryBuilder.splits_slashes(keyword) for keyword in compounds]
+        self.normalized_activities = [ScopusQueryBuilder.splits_slashes(keyword) for keyword in activities]
 
-    compounds: List[str] = list(data.compounds.keys())
-    activities: List[str] = list(data.activities.keys())
-    any_compound = chain(splits_slashes(compound) for compound in compounds)
-    any_activity = chain(splits_slashes(activity) for activity in activities)
+    def generate(
+        self,
+        pos_compound: Optional[str] = None,
+        neg_compound: Optional[str] = None,
+        pos_activity: Optional[str] = None,
+        neg_activity: Optional[str] = None,
+    ):
+        """Builds a DNF selecting articles such that:
 
-    queries = []
-    # grand total
-    queries.push( ()  )
-    # # marginal sums : rows
-    
-    # queries += [((splits_slashes(compound,), tuple(any_activity)), ()) for compound in compounds]
-    # # marginal sums : cols
-    # queries += [((tuple(compounds), (activity,)), ()) for activity in activities]
+        1. at least one of compounds is a keyword
+        2. at least one of activitties is a keyword
+        3. the positive compound is a keyword, overriding condition 1.
+        4. the negative compound is NOT a keyword
+        5. the positive activity is a keyword, overriding condition 2.
+        6. the negative activity is NOT a keyword
 
-    # queries = [[[compound], [activity]] for compound in compounds for activity in activities]
-    # queries += [[compounds], [activities]]
-    # queries += [[compounds], [activities]]
-    # queries += [[compounds, activities]]
-    logger.debug(f"generate_all_dnf({compounds}, {activities}) =\n{pformat(queries)}")
-    return queries
-
+        """
 
 # download_all(mode=args.mode, parallel=args.parallel, , samples=args.samples, all=args.all, write=args.write)
 def download_all(

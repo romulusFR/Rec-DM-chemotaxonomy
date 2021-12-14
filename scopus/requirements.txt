@@ -1,0 +1,10 @@
+pandas
+numpy
+scipy
+matplotlib
+python-dotenv
+certifi
+aiohttp
+networkx
+sklearn
+seaborn
