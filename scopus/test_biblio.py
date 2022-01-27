@@ -1,5 +1,5 @@
 import pytest
-import downloader_v2 as dl
+import biblio_extractor as dl
 
 
 COMPOUNDS = ["acridine", "anthraquinone", "tetraterpene/carotenoid", "triterpene"]

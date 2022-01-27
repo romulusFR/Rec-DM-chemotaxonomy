@@ -1,16 +1,16 @@
 # pylint: disable=unused-import,anomalous-backslash-in-string
-"""Download bibliographical information from Scopus"""
+"""Generate queries and summarizes number of articles from bibliographical DB (e.g., Scopus)"""
 
 # %%
 
-# import json
-import requests
 import asyncio
 import logging
 import ssl
 import time
+from math import prod
 from os import environ
 from pathlib import Path
+from posixpath import split
 from pprint import pprint
 
 import aiohttp
@@ -18,14 +18,10 @@ import certifi
 import pandas as pd
 from dotenv import load_dotenv
 
-from loader import Dataset, load_chemo_activities, write_chemo_activities
-
-logging.basicConfig()
-logger = logging.getLogger("chemo-diversity-scopus")
-logger.setLevel(logging.DEBUG)
-
 # take environment variables from .env.
 # MUST DEFINE API_KEY with apy key from
+logging.basicConfig()
+logger = logging.getLogger("biblio.extractor")
 load_dotenv()
 
 # OUTPUT
@@ -193,6 +189,7 @@ def generate_all_queries(data: pd.DataFrame):
     yield (compounds, activities, [], [])
 
 if __name__ == "__main__":
+    logger.setLevel(logging.DEBUG)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     logger.info("output dir is '%s'", OUTPUT_DIR.absolute())
     logger.info("Scopus API key %s", API_KEY)
@@ -220,4 +217,28 @@ if __name__ == "__main__":
     for query in all_queries:
         logger.info("query is %s", query[-2:])
         query_load = wrap_scopus(clausal_query(*query))
-        res = asyncio.run(do_async(query_load))
+        # res = asyncio.run(do_async(query_load))
+
+
+# df.loc[("shs","sociology"), ("computer science", "web")] = 12
+
+
+
+# %%
+    SELECTORS = ["w/", "w/o"]
+
+    def extend_df(df:pd.DataFrame):
+        mrows = pd.MultiIndex.from_tuples((cls, val, s) for (cls, val) in df.index for s in SELECTORS)
+        mcols = pd.MultiIndex.from_tuples((cls, val, s) for (cls, val) in df.columns for s in SELECTORS)
+
+        return pd.DataFrame(index=mrows, columns=mcols)
+
+
+    df2=extend_df(df)
+
+    df2.iloc[df2.index.get_level_values(2) == SELECTORS[0]]
+
+    # margin_rows = pd.DataFrame(index=mrows, columns=pd.MultiIndex.from_tuples([("Σ","","w/"), ("Σ","","w/o")]))
+    # pd.concat([df2, margin_rows])
+
+    # %%
