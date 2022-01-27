@@ -1,5 +1,35 @@
 # pylint: disable=unused-import,anomalous-backslash-in-string
-"""Generate queries and summarizes number of articles from bibliographical DB (e.g., Scopus)"""
+"""Generate queries and summarizes number of articles from bibliographical DB (e.g., Scopus)
+
+The general idea is to have TWO disjoint finite sets of keywords such as :
+
+- (chemical) coumpounds = KW1 = {acridine, triterpene, ...}
+- (biological, pharmacological) activities = KW2 = {germination, cytotoxicity, ...}
+
+Then to query an online bibligraphical service such as <https://api.elsevier.com/content/search/scopus> to find out how many papers have these keywords.
+Each paper may have many keywords from the two sets, possibly none (open world hypothesis).
+
+We want to analyse the dependencies between the two sets keywords using techniques like <https://en.wikipedia.org/wiki/Correspondence_analysis>
+To do so, this program creates and fill specific kind of contingency table such as follows :
+
+                germination germination cytotoxicity    cytotoxicity
+                w/          w/          w/              w/o
+acridine    w/  U_11        V_11        U_12            V_12
+acridine    w/o X_11        Y_11        X_12            Y_12
+triterpene  w/  U_21        V_21        U_22            V_22
+triterpene  w/o X_21        Y_21        X_22            Y_22
+
+Where for each couple (kw_i, kw_j) in KW1xKW2, the submatrix [U,V][X,Y] gives :
+
+- U = the number of papers that have both (kw1, kw2) as keywords
+- V = the number of papers that have kw1 but NOT kw2 as keywords
+- X = the number of papers that have kw2 but NOT kw1 as keywords
+- Y = the number of papers that have NEITHER kw1 NOR kw2 as keywords
+
+We restrict the analysis to the domain D, which is the set of paper that have at least one keyword in KW1 and at least one in KW2.
+So, by contruction each submatrix [U,V][X,Y] is such that U + V + X + Y  = |D|
+
+"""
 
 # %%
 
@@ -7,11 +37,8 @@ import asyncio
 import logging
 import ssl
 import time
-from math import prod
 from os import environ
 from pathlib import Path
-from posixpath import split
-from pprint import pprint
 
 import aiohttp
 import certifi
@@ -24,26 +51,28 @@ logging.basicConfig()
 logger = logging.getLogger("biblio.extractor")
 load_dotenv()
 
-# OUTPUT
-OUTPUT_DIR = Path("results")
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-
-# API Scopus
+# Scopus API
 API_KEY = {"X-ELS-APIKey": environ.get("API_KEY", "no-elsevier-api-key-defined")}
 X_RATE_HEADERS = ["X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"]
 SSL_CONTEXT = ssl.create_default_context(cafile=certifi.where())
 
-# output
+# Output
 OUTPUT_DIR = Path("results")
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+# Input
 INPUT_DATA = Path("data/activities.csv")
 SAMPLE_DATA = Path("data/samples.csv")
 TEST_DATA = Path("data/tests.csv")
+
+# I/O configuration
 CSV_PARAMS = {"sep": ";", "quotechar": '"'}
 ALT_SEP = "/"
+SELECTORS = ["w/", "w/o"]
 
 
 def load_data(file: str | Path):
-    """loads data as a dataframe"""
+    """loads a CSV dataset as a dataframe"""
     # https://pandas.pydata.org/docs/reference/api/pandas.read_csv.html
     df = pd.read_csv(file, index_col=[0, 1], header=[0, 1]).fillna(0)
     logger.debug("dataset %s read", file)
@@ -162,9 +191,12 @@ async def do_async(query):
     return res
 
 
-def generate_all_queries(data: pd.DataFrame):
+def generate_all_queries(data: pd.DataFrame, with_margin=False):
+    """Generate all values to fill the contengency table"""
     compounds = list(data.index.get_level_values(1))
     activities = list(data.columns.get_level_values(1))
+
+    # the main content : 4 x |KW1| x |KW2| cells
     for compound in compounds:
         for activity in activities:
             # both the compound and the activity
@@ -176,17 +208,20 @@ def generate_all_queries(data: pd.DataFrame):
             # neither the compound nor the activity (but stil in the domain)
             yield (compounds, activities, [], [compound, activity])
 
+    # adds extra rows/columns for marginal sums (an extra row and an extra column for total)
+    # this should add 4 x (|KW1| + |KW2| + 1) but we exclude 2 + 2 + 3 degenerated combinations which always are 0
+    if with_margin:
+        # rows margin sums, -2 always 0
+        for compound in compounds:
+            yield ([], activities, [compound], [])
+            yield (compounds, activities, [], [compound])
+        # cols margin sums, -2 always 0
+        for activity in activities:
+            yield (compounds, [], [activity], [])
+            yield (compounds, activities, [], [activity])
+        # total margin sum, -3 always 0
+        yield (compounds, activities, [], [])
 
-    #rows margin sums
-    for compound in compounds:
-        yield ([], activities, [compound], [])
-        yield (compounds, activities, [], [compound])
-    #cols margin sums
-    for activity in activities:
-        yield (compounds, [], [activity], [])
-        yield (compounds, activities, [], [activity])
-    #total margin sum
-    yield (compounds, activities, [], [])
 
 if __name__ == "__main__":
     logger.setLevel(logging.DEBUG)
@@ -199,8 +234,6 @@ if __name__ == "__main__":
     all_activities = list(df.columns.get_level_values(1))
     logger.debug("all compounds %s", all_compounds)
     logger.debug("all activities %s", all_activities)
-
-
 
     # print(df.columns.get_level_values(1))
     # print(cnf)
@@ -219,22 +252,17 @@ if __name__ == "__main__":
         query_load = wrap_scopus(clausal_query(*query))
         # res = asyncio.run(do_async(query_load))
 
+    # df.loc[("shs","sociology"), ("computer science", "web")] = 12
 
-# df.loc[("shs","sociology"), ("computer science", "web")] = 12
+    # %%
 
-
-
-# %%
-    SELECTORS = ["w/", "w/o"]
-
-    def extend_df(df:pd.DataFrame):
+    def extend_df(df: pd.DataFrame):
         mrows = pd.MultiIndex.from_tuples((cls, val, s) for (cls, val) in df.index for s in SELECTORS)
         mcols = pd.MultiIndex.from_tuples((cls, val, s) for (cls, val) in df.columns for s in SELECTORS)
 
         return pd.DataFrame(index=mrows, columns=mcols)
 
-
-    df2=extend_df(df)
+    df2 = extend_df(df)
 
     df2.iloc[df2.index.get_level_values(2) == SELECTORS[0]]
 
