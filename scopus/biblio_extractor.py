@@ -35,9 +35,11 @@ So, by contruction each submatrix [U,V][X,Y] is such that U + V + X + Y  = |D|
 # %%
 
 import asyncio
+from functools import wraps
 from itertools import product
 import logging
 import ssl
+from random import randint
 import time
 from os import environ
 from pathlib import Path
@@ -92,27 +94,17 @@ def load_data(file: str | Path):
     df.index = pd.MultiIndex.from_tuples([tuple(normalize_names(x) for x in t) for t in df.index])
     df.columns = pd.MultiIndex.from_tuples([tuple(normalize_names(x) for x in t) for t in df.columns])
 
-    # no names attribute to ensure read -> write is identity
-    # , names = ["a-class", "compound"]
-    # , names = ["a-class", "activity"]
-
-    # remove first level on index
-    # df = df.droplevel("C-Class", axis = 0)
-    # df = df.droplevel("A-Class", axis = 1)
-
-    # compounds = {y: x for (x, y) in df.index}
-    # activities = {y: x for (x, y) in df.columns}
-
-    # compounds_classes, compounds = df.index.levels
-    # activities_classes, activities = df.columns.levels
-
     logger.info("%i compounds (with %i classes)", len(df.index.levels[1]), len(df.index.levels[0]))
     logger.info("%i activities (with %i classes)", len(df.columns.levels[1]), len(df.columns.levels[0]))
 
     return df
 
 
-def clausal_query(compounds, activities, pos_kw: list[str], neg_kw: list[str]):
+# an aliases for queries
+Query = tuple[list[str], list[str], list[str], list[str]]
+
+
+def clausal_query(compounds, activities, pos_kw: list[str], neg_kw: list[str]) -> str:
     """Build a logical clause of the following form:
 
         (c_1 \/ ... \/ c_m)
@@ -154,22 +146,63 @@ def clausal_query(compounds, activities, pos_kw: list[str], neg_kw: list[str]):
     return clauses
 
 
-def wrap_scopus(string: str):
-    """Wraps a string query into an object to be sent as JSON over Scopus API"""
-    if not string:
-        raise ValueError("string must be non-empty")
-    return {"query": f'DOCTYPE("ar") AND {string}', "count": 1}
+# async def query_fake(_, keywords, *, delay=0):
+#     """Fake query tool without network, for test purpose"""
+#     results_nb = randint(1, 10000)
+#     await asyncio.sleep(delay)
+#     start_time = time.perf_counter()
+#     logger.debug("query_fake(%s): launching at %s", keywords, start_time)
+#     logger.debug("           %s", build_search_query(*keywords)["query"])
+
+#     await asyncio.sleep(randint(1, 1000) / 1000)
+#     elapsed = time.perf_counter() - start_time
+#     return (keywords, results_nb, elapsed)
 
 
-async def query_scopus(json_query, delay=0):
+# async def query_httpbin(session, keywords, *, delay=0, error_rate=1):
+#     """Fake query tool WITH network on httpbin, for test purpose"""
+#     # simule 1% d'erreur
+#     if randint(1, 100) <= error_rate:
+#         url = "http://httpbin.org/status/429"
+#     else:
+#         url = "http://httpbin.org/anything"
+#     data = {"answer": randint(1, 10000)}
+#     results_nb = -1
+#     query = build_search_query(*keywords)
+#     await asyncio.sleep(delay)
+#     start_time = time.perf_counter()
+#     logger.debug("query_httpbin(%s): launching at %s", keywords, start_time)
+#     logger.debug("           %s", query)
+
+#     try:
+#         async with session.get(url, params=query, data=data, ssl=SSL_CONTEXT) as resp:
+#             json = await resp.json()
+#             # args = json["args"]["query"]
+#             results_nb = int(json["form"]["answer"])
+#             logger.debug("query_httpbin(%s): results_nb=%i", keywords, results_nb)
+#     except aiohttp.ClientError as err:  # aiohttp.ClientError
+#         logger.error(err)
+#         results_nb = -1
+#     finally:
+#         elapsed = time.perf_counter() - start_time
+#     return (keywords, results_nb, elapsed)
+
+
+async def scopus_search(query: Query, delay=0):
     """SCOPUS query tool: return the number of article papers having two sets of keywords. Delay is in sec"""
     scopus_url = "https://api.elsevier.com/content/search/scopus"
-    results_nb = -1
+    results_nb = None
+
+    def wrap_scopus(string: str):
+        """Wraps a string query into an object to be sent as JSON over Scopus API"""
+        if not string:
+            raise ValueError("string must be non-empty")
+        return {"query": f'DOCTYPE("ar") AND {string}', "count": 1}
 
     await asyncio.sleep(delay)
     start_time = time.perf_counter()
-    # logger.debug("query_scopus(%s) @%s", keywords, start_time)
-    # logger.debug("           %s", query)
+    logger.debug("query_scopus(%s) @%f", query[-2:], start_time)
+    json_query = wrap_scopus(clausal_query(*query))
     try:
         async with aiohttp.ClientSession(raise_for_status=True) as session:
             async with session.get(scopus_url, params=json_query, headers=API_KEY, ssl=SSL_CONTEXT) as resp:
@@ -178,21 +211,20 @@ async def query_scopus(json_query, delay=0):
                 results_nb = int(json["search-results"]["opensearch:totalResults"], 10)
     except aiohttp.ClientError as err:
         logger.error(err)
-        results_nb = -1
     finally:
         elapsed = time.perf_counter() - start_time
-    logger.debug("query_scopus(): results_nb=%i in %f sec", results_nb, elapsed)
-    return results_nb
+    logger.debug("query_scopus(%s)=%i in %f sec", query[-2:], results_nb, elapsed)
+    return query[-2], query[-1], results_nb
 
 
-async def do_async(query):
+async def do_async(query: Query):
     """Launch aysync job"""
     # loop = asyncio.get_event_loop()
     # # async with aiohttp.ClientSession(raise_for_status=True) as session:
     # main_task = loop.create_task(asyncio.sleep(2), name="main-queue")
     # results = loop.run_until_complete(main_task)
     # return results
-    res = await asyncio.gather(query_scopus(query))
+    res = await asyncio.gather(scopus_search(query))
     # print(res)
     return res
 
@@ -252,15 +284,6 @@ def extend_df(df: pd.DataFrame, with_margin=False) -> pd.DataFrame:
 
     return pd.DataFrame(index=extended_rows, columns=extended_cols)
 
-    # df2 = pd.DataFrame(index=mrows, columns=mcols)
-
-    # if with_margin:
-    #     margin_rows = pd.DataFrame(index=mrows, columns=pd.MultiIndex.from_tuples(product(["Σ"], SELECTORS)))
-    #     margin_cols = pd.DataFrame(index=mcols, columns=pd.MultiIndex.from_tuples(product(["Σ"], SELECTORS)))
-    #     df2 = pd.concat([df2, margin_rows])
-
-    # return df2
-
 
 if __name__ == "__main__":
     logger.setLevel(logging.DEBUG)
@@ -281,17 +304,18 @@ if __name__ == "__main__":
     # res = asyncio.run(do_async(wrap_scopus_query(cnf)))
     # print(res)
 
-    all_queries = list(generate_all_queries(dataset))
+    all_queries = list(generate_all_queries(dataset, True))
     # pprint(all_queries)
     logger.info("total number of queries: %i", len(all_queries))
     # print(res[0]["search-results"]["entry"][0])
 
-    for query in all_queries:
-        logger.info("query is %s", query[-2:])
-        query_load = wrap_scopus(clausal_query(*query))
-        # res = asyncio.run(do_async(query_load))
+    for a_query in all_queries[-2:]:
+        # logger.debug("query is %s", a_query[-2:])
+        # query_load = wrap_scopus(clausal_query(*query))
+        res = asyncio.run(do_async(a_query))
+        # print(res)
 
     # df.loc[("shs","sociology"), ("computer science", "web")] = 12
 
     # %%
-    dataset2 = extend_df(dataset)
+    # dataset2 = extend_df(dataset)

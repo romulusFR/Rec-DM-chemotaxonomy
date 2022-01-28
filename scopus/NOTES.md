@@ -198,3 +198,230 @@ For _Scopus Search_, see <https://dev.elsevier.com/api_key_settings.html>
   "loadedAfter": "2018-06-01T00:00:00Z"
 }
 ```
+
+## Extra on pandas
+
+```python
+# no names attribute to ensure read -> write is identity
+, names = ["a-class", "compound"]
+, names = ["a-class", "activity"]
+
+# remove first level on index
+df = df.droplevel("C-Class", axis = 0)
+df = df.droplevel("A-Class", axis = 1)
+
+compounds = {y: x for (x, y) in df.index}
+activities = {y: x for (x, y) in df.columns}
+
+compounds_classes, compounds = df.index.levels
+activities_classes, activities = df.columns.levels
+```
+
+## Complete query "all compounds"
+
+```raw
+((KEY("acridine")) OR (KEY("benzylamine")) OR (KEY("colchicine")) OR (KEY("cyclopeptide")) OR (KEY("imidazole")) OR (KEY("indole")) OR (KEY("indolizidine")) OR (KEY("isoquinoline")) OR (KEY("isoxazole")) OR (KEY("muscarine")) OR (KEY("oxazole")) OR (KEY("phenylethylamine")) OR (KEY("piperidine")) OR (KEY("purine")) OR (KEY("putrescine")) OR (KEY("pyridine")) OR (KEY("pyrrolidine")) OR (KEY("pyrrolizidine")) OR (KEY("quinazoline")) OR (KEY("quinoline")) OR (KEY("quinolizidine")) OR (KEY("spermidine")) OR (KEY("spermine")) OR (KEY("thiazole")) OR (KEY("tropane")) OR (KEY("acetophenone")) OR (KEY("anthraquinone")) OR (KEY("biflavonoids")) OR (KEY("flavonoids")) OR (KEY("isoflavanoids")) OR (KEY("lignans")) OR (KEY("naphthoquinone")) OR (KEY("phenol")) OR (KEY("phenolic acid")) OR (KEY("phenylpropanoid")) OR (KEY("stilbene")) OR (KEY("tannin")) OR (KEY("xanthone")) OR (KEY("acetogenin")) OR (KEY("ansamycin")) OR (KEY("macrolide")) OR (KEY("polyene")) OR (KEY("polyether")) OR (KEY("tetracycline")) OR (KEY("diterpene")) OR (KEY("hemiterpene")) OR (KEY("monoterpene")) OR (KEY("norisoprenoid")) OR (KEY("polyterpene")) OR (KEY("sesquiterpene")) OR (KEY("sesterterpene")) OR (KEY("tetraterpene") OR KEY("carotenoid") OR KEY("xanthophyll")) OR (KEY("triterpene")))
+```
+
+1,138,377 document results
+
+## All activities
+
+```raw
+((KEY("antioxidant")) OR (KEY("drought")) OR (KEY("metal")) OR (KEY("uv")) OR (KEY("salt")) OR (KEY("antifeedant")) OR (KEY("arbuscula")) OR (KEY("attractant")) OR (KEY("germination")) OR (KEY("herbicidal")) OR (KEY("hppd")) OR (KEY("hyphal")) OR (KEY("phytotoxicity")) OR (KEY("quorum sensing")) OR (KEY("repulsive")) OR (KEY("toxicant")) OR (KEY("antidiabetic")) OR (KEY("cardiovascular")) OR (KEY("obesity")) OR (KEY("rheumatism")) OR (KEY("antibacterial")) OR (KEY("antifungal")) OR (KEY("antimicrobial")) OR (KEY("antiparasitic")) OR (KEY("antiviral")) OR (KEY("anti-inflammatory")) OR (KEY("arthritis")) OR (KEY("burns")) OR (KEY("wound")) OR (KEY("anticancer")) OR (KEY("cytotoxicity")) OR (KEY("sedative")) OR (KEY("toxicity")))
+```
+
+5,341,029 document results
+
+## Full domain
+
+```raw
+((KEY("acridine")) OR (KEY("benzylamine")) OR (KEY("colchicine")) OR (KEY("cyclopeptide")) OR (KEY("imidazole")) OR (KEY("indole")) OR (KEY("indolizidine")) OR (KEY("isoquinoline")) OR (KEY("isoxazole")) OR (KEY("muscarine")) OR (KEY("oxazole")) OR (KEY("phenylethylamine")) OR (KEY("piperidine")) OR (KEY("purine")) OR (KEY("putrescine")) OR (KEY("pyridine")) OR (KEY("pyrrolidine")) OR (KEY("pyrrolizidine")) OR (KEY("quinazoline")) OR (KEY("quinoline")) OR (KEY("quinolizidine")) OR (KEY("spermidine")) OR (KEY("spermine")) OR (KEY("thiazole")) OR (KEY("tropane")) OR (KEY("acetophenone")) OR (KEY("anthraquinone")) OR (KEY("biflavonoids")) OR (KEY("flavonoids")) OR (KEY("isoflavanoids")) OR (KEY("lignans")) OR (KEY("naphthoquinone")) OR (KEY("phenol")) OR (KEY("phenolic acid")) OR (KEY("phenylpropanoid")) OR (KEY("stilbene")) OR (KEY("tannin")) OR (KEY("xanthone")) OR (KEY("acetogenin")) OR (KEY("ansamycin")) OR (KEY("macrolide")) OR (KEY("polyene")) OR (KEY("polyether")) OR (KEY("tetracycline")) OR (KEY("diterpene")) OR (KEY("hemiterpene")) OR (KEY("monoterpene")) OR (KEY("norisoprenoid")) OR (KEY("polyterpene")) OR (KEY("sesquiterpene")) OR (KEY("sesterterpene")) OR (KEY("tetraterpene") OR KEY("carotenoid") OR KEY("xanthophyll")) OR (KEY("triterpene"))) AND ((KEY("antioxidant")) OR (KEY("drought")) OR (KEY("metal")) OR (KEY("uv")) OR (KEY("salt")) OR (KEY("antifeedant")) OR (KEY("arbuscula")) OR (KEY("attractant")) OR (KEY("germination")) OR (KEY("herbicidal")) OR (KEY("hppd")) OR (KEY("hyphal")) OR (KEY("phytotoxicity")) OR (KEY("quorum sensing")) OR (KEY("repulsive")) OR (KEY("toxicant")) OR (KEY("antidiabetic")) OR (KEY("cardiovascular")) OR (KEY("obesity")) OR (KEY("rheumatism")) OR (KEY("antibacterial")) OR (KEY("antifungal")) OR (KEY("antimicrobial")) OR (KEY("antiparasitic")) OR (KEY("antiviral")) OR (KEY("anti-inflammatory")) OR (KEY("arthritis")) OR (KEY("burns")) OR (KEY("wound")) OR (KEY("anticancer")) OR (KEY("cytotoxicity")) OR (KEY("sedative")) OR (KEY("toxicity")))
+```
+
+292,709 document results
+
+## Output for test dataset
+
+```raw
+INFO:chemo-diversity-scopus:output dir is '/home/romulus/Documents/Rec-DM-chemotaxonomy/scopus/results'
+INFO:chemo-diversity-scopus:Scopus API key {'X-ELS-APIKey': '74c71d241426db269fba091507dfde38'}
+DEBUG:chemo-diversity-scopus:dataset data/tests.csv read
+INFO:chemo-diversity-scopus:2 compounds (with 1 classes)
+INFO:chemo-diversity-scopus:2 activities (with 1 classes)
+DEBUG:chemo-diversity-scopus:all compounds ['sociology', 'linguistics']
+DEBUG:chemo-diversity-scopus:all activities ['databases', 'web']
+INFO:chemo-diversity-scopus:total number of queries: 25
+INFO:chemo-diversity-scopus:query is (['sociology', 'databases'], [])
+DEBUG:chemo-diversity-scopus:X-RateLimit-Remaining=19966
+DEBUG:chemo-diversity-scopus:query_scopus(): results_nb=165 in 1.459132 sec
+INFO:chemo-diversity-scopus:query is (['databases'], ['sociology'])
+DEBUG:chemo-diversity-scopus:X-RateLimit-Remaining=19965
+DEBUG:chemo-diversity-scopus:query_scopus(): results_nb=2153 in 0.684227 sec
+INFO:chemo-diversity-scopus:query is (['sociology'], ['databases'])
+DEBUG:chemo-diversity-scopus:X-RateLimit-Remaining=19964
+DEBUG:chemo-diversity-scopus:query_scopus(): results_nb=128 in 1.320619 sec
+INFO:chemo-diversity-scopus:query is ([], ['sociology', 'databases'])
+DEBUG:chemo-diversity-scopus:X-RateLimit-Remaining=19963
+DEBUG:chemo-diversity-scopus:query_scopus(): results_nb=977 in 1.199515 sec
+INFO:chemo-diversity-scopus:query is (['sociology', 'web'], [])
+DEBUG:chemo-diversity-scopus:X-RateLimit-Remaining=19962
+DEBUG:chemo-diversity-scopus:query_scopus(): results_nb=141 in 0.620706 sec
+INFO:chemo-diversity-scopus:query is (['web'], ['sociology'])
+DEBUG:chemo-diversity-scopus:X-RateLimit-Remaining=19961
+DEBUG:chemo-diversity-scopus:query_scopus(): results_nb=1090 in 1.334602 sec
+INFO:chemo-diversity-scopus:query is (['sociology'], ['web'])
+DEBUG:chemo-diversity-scopus:X-RateLimit-Remaining=19960
+DEBUG:chemo-diversity-scopus:query_scopus(): results_nb=152 in 0.669188 sec
+INFO:chemo-diversity-scopus:query is ([], ['sociology', 'web'])
+DEBUG:chemo-diversity-scopus:X-RateLimit-Remaining=19959
+DEBUG:chemo-diversity-scopus:query_scopus(): results_nb=2040 in 1.267862 sec
+INFO:chemo-diversity-scopus:query is (['linguistics', 'databases'], [])
+DEBUG:chemo-diversity-scopus:X-RateLimit-Remaining=19958
+DEBUG:chemo-diversity-scopus:query_scopus(): results_nb=2155 in 1.311808 sec
+INFO:chemo-diversity-scopus:query is (['databases'], ['linguistics'])
+DEBUG:chemo-diversity-scopus:X-RateLimit-Remaining=19957
+DEBUG:chemo-diversity-scopus:query_scopus(): results_nb=163 in 1.189209 sec
+INFO:chemo-diversity-scopus:query is (['linguistics'], ['databases'])
+DEBUG:chemo-diversity-scopus:X-RateLimit-Remaining=19956
+DEBUG:chemo-diversity-scopus:query_scopus(): results_nb=979 in 0.512150 sec
+INFO:chemo-diversity-scopus:query is ([], ['linguistics', 'databases'])
+DEBUG:chemo-diversity-scopus:X-RateLimit-Remaining=19955
+DEBUG:chemo-diversity-scopus:query_scopus(): results_nb=126 in 0.696818 sec
+INFO:chemo-diversity-scopus:query is (['linguistics', 'web'], [])
+DEBUG:chemo-diversity-scopus:X-RateLimit-Remaining=19954
+DEBUG:chemo-diversity-scopus:query_scopus(): results_nb=1092 in 1.187027 sec
+INFO:chemo-diversity-scopus:query is (['web'], ['linguistics'])
+DEBUG:chemo-diversity-scopus:X-RateLimit-Remaining=19953
+DEBUG:chemo-diversity-scopus:query_scopus(): results_nb=139 in 0.456412 sec
+INFO:chemo-diversity-scopus:query is (['linguistics'], ['web'])
+DEBUG:chemo-diversity-scopus:X-RateLimit-Remaining=19952
+DEBUG:chemo-diversity-scopus:query_scopus(): results_nb=2042 in 0.515974 sec
+INFO:chemo-diversity-scopus:query is ([], ['linguistics', 'web'])
+DEBUG:chemo-diversity-scopus:X-RateLimit-Remaining=19951
+DEBUG:chemo-diversity-scopus:query_scopus(): results_nb=150 in 1.266023 sec
+INFO:chemo-diversity-scopus:query is (['sociology'], [])
+DEBUG:chemo-diversity-scopus:X-RateLimit-Remaining=19950
+DEBUG:chemo-diversity-scopus:query_scopus(): results_nb=293 in 0.529831 sec
+INFO:chemo-diversity-scopus:query is ([], ['sociology'])
+DEBUG:chemo-diversity-scopus:X-RateLimit-Remaining=19949
+DEBUG:chemo-diversity-scopus:query_scopus(): results_nb=3130 in 1.448143 sec
+INFO:chemo-diversity-scopus:query is (['linguistics'], [])
+DEBUG:chemo-diversity-scopus:X-RateLimit-Remaining=19948
+DEBUG:chemo-diversity-scopus:query_scopus(): results_nb=3134 in 1.287377 sec
+INFO:chemo-diversity-scopus:query is ([], ['linguistics'])
+DEBUG:chemo-diversity-scopus:X-RateLimit-Remaining=19947
+DEBUG:chemo-diversity-scopus:query_scopus(): results_nb=289 in 1.214314 sec
+INFO:chemo-diversity-scopus:query is (['databases'], [])
+DEBUG:chemo-diversity-scopus:X-RateLimit-Remaining=19946
+DEBUG:chemo-diversity-scopus:query_scopus(): results_nb=2318 in 1.280899 sec
+INFO:chemo-diversity-scopus:query is ([], ['databases'])
+DEBUG:chemo-diversity-scopus:X-RateLimit-Remaining=19945
+DEBUG:chemo-diversity-scopus:query_scopus(): results_nb=1105 in 1.225449 sec
+INFO:chemo-diversity-scopus:query is (['web'], [])
+DEBUG:chemo-diversity-scopus:X-RateLimit-Remaining=19944
+DEBUG:chemo-diversity-scopus:query_scopus(): results_nb=1231 in 1.324022 sec
+INFO:chemo-diversity-scopus:query is ([], ['web'])
+DEBUG:chemo-diversity-scopus:X-RateLimit-Remaining=19943
+DEBUG:chemo-diversity-scopus:query_scopus(): results_nb=2192 in 0.503255 sec
+INFO:chemo-diversity-scopus:query is ([], [])
+DEBUG:chemo-diversity-scopus:X-RateLimit-Remaining=19942
+DEBUG:chemo-diversity-scopus:query_scopus(): results_nb=3423 in 0.563425 sec
+```
+
+### Another json
+
+```json
+{
+  "search-results": {
+    "opensearch:totalResults": "1225",
+    "opensearch:startIndex": "0",
+    "opensearch:itemsPerPage": "1",
+    "opensearch:Query": {
+      "@role": "request",
+      "@searchTerms": "( ((KEY(acridine)) OR (KEY(anthraquinone)) OR (KEY(tetraterpene) OR KEY(carotenoid) OR KEY(xanthophyll)) OR (KEY(triterpene))) AND ((KEY(germination)) OR (KEY(herbicidal)) OR (KEY(cytotoxicity)) OR (KEY(sedative))) AND ((KEY(acridine))) AND NOT ((KEY(cytotoxicity) AND KEY(toxicity))) ) AND ( DOCTYPE( \"ar\" ) )",
+      "@startPage": "0"
+    },
+    "link": [
+      {
+        "@_fa": "true",
+        "@ref": "self",
+        "@href": "https://api.elsevier.com/content/search/scopus?start=0&count=1&query=%28+%28%28KEY%28acridine%29%29+OR+%28KEY%28anthraquinone%29%29+OR+%28KEY%28tetraterpene%29+OR+KEY%28carotenoid%29+OR+KEY%28xanthophyll%29%29+OR+%28KEY%28triterpene%29%29%29+AND+%28%28KEY%28germination%29%29+OR+%28KEY%28herbicidal%29%29+OR+%28KEY%28cytotoxicity%29%29+OR+%28KEY%28sedative%29%29%29+AND+%28%28KEY%28acridine%29%29%29+AND+NOT+%28%28KEY%28cytotoxicity%29+AND+KEY%28toxicity%29%29%29+%29+AND+%28+DOCTYPE%28+%22ar%22+%29+%29",
+        "@type": "application/json"
+      },
+      {
+        "@_fa": "true",
+        "@ref": "first",
+        "@href": "https://api.elsevier.com/content/search/scopus?start=0&count=1&query=%28+%28%28KEY%28acridine%29%29+OR+%28KEY%28anthraquinone%29%29+OR+%28KEY%28tetraterpene%29+OR+KEY%28carotenoid%29+OR+KEY%28xanthophyll%29%29+OR+%28KEY%28triterpene%29%29%29+AND+%28%28KEY%28germination%29%29+OR+%28KEY%28herbicidal%29%29+OR+%28KEY%28cytotoxicity%29%29+OR+%28KEY%28sedative%29%29%29+AND+%28%28KEY%28acridine%29%29%29+AND+NOT+%28%28KEY%28cytotoxicity%29+AND+KEY%28toxicity%29%29%29+%29+AND+%28+DOCTYPE%28+%22ar%22+%29+%29",
+        "@type": "application/json"
+      },
+      {
+        "@_fa": "true",
+        "@ref": "next",
+        "@href": "https://api.elsevier.com/content/search/scopus?start=1&count=1&query=%28+%28%28KEY%28acridine%29%29+OR+%28KEY%28anthraquinone%29%29+OR+%28KEY%28tetraterpene%29+OR+KEY%28carotenoid%29+OR+KEY%28xanthophyll%29%29+OR+%28KEY%28triterpene%29%29%29+AND+%28%28KEY%28germination%29%29+OR+%28KEY%28herbicidal%29%29+OR+%28KEY%28cytotoxicity%29%29+OR+%28KEY%28sedative%29%29%29+AND+%28%28KEY%28acridine%29%29%29+AND+NOT+%28%28KEY%28cytotoxicity%29+AND+KEY%28toxicity%29%29%29+%29+AND+%28+DOCTYPE%28+%22ar%22+%29+%29",
+        "@type": "application/json"
+      },
+      {
+        "@_fa": "true",
+        "@ref": "last",
+        "@href": "https://api.elsevier.com/content/search/scopus?start=1224&count=1&query=%28+%28%28KEY%28acridine%29%29+OR+%28KEY%28anthraquinone%29%29+OR+%28KEY%28tetraterpene%29+OR+KEY%28carotenoid%29+OR+KEY%28xanthophyll%29%29+OR+%28KEY%28triterpene%29%29%29+AND+%28%28KEY%28germination%29%29+OR+%28KEY%28herbicidal%29%29+OR+%28KEY%28cytotoxicity%29%29+OR+%28KEY%28sedative%29%29%29+AND+%28%28KEY%28acridine%29%29%29+AND+NOT+%28%28KEY%28cytotoxicity%29+AND+KEY%28toxicity%29%29%29+%29+AND+%28+DOCTYPE%28+%22ar%22+%29+%29",
+        "@type": "application/json"
+      }
+    ],
+    "entry": [
+      {
+        "@_fa": "true",
+        "link": [
+          {
+            "@_fa": "true",
+            "@ref": "self",
+            "@href": "https://api.elsevier.com/content/abstract/scopus_id/85122349027"
+          },
+          {
+            "@_fa": "true",
+            "@ref": "author-affiliation",
+            "@href": "https://api.elsevier.com/content/abstract/scopus_id/85122349027?field=author,affiliation"
+          },
+          {
+            "@_fa": "true",
+            "@ref": "scopus",
+            "@href": "https://www.scopus.com/inward/record.uri?partnerID=HzOxMe3b&scp=85122349027&origin=inward"
+          },
+          {
+            "@_fa": "true",
+            "@ref": "scopus-citedby",
+            "@href": "https://www.scopus.com/inward/citedby.uri?partnerID=HzOxMe3b&scp=85122349027&origin=inward"
+          }
+        ],
+        "prism:url": "https://api.elsevier.com/content/abstract/scopus_id/85122349027",
+        "dc:identifier": "SCOPUS_ID:85122349027",
+        "eid": "2-s2.0-85122349027",
+        "dc:title": "Evaluation of cytotoxicity, apoptosis, and angiogenesis induced by Kombucha extract-loaded PLGA nanoparticles in human ovarian cancer cell line (A2780)",
+        "dc:creator": "Ghandehari S.",
+        "prism:publicationName": "Biomass Conversion and Biorefinery",
+        "prism:issn": "21906815",
+        "prism:eIssn": "21906823",
+        "prism:pageRange": null,
+        "prism:coverDate": "2022-01-01",
+        "prism:coverDisplayDate": "2022",
+        "prism:doi": "10.1007/s13399-021-02283-2",
+        "citedby-count": "0",
+        "affiliation": [
+          {
+            "@_fa": "true",
+            "affilname": "Islamic Azad University, Shahrood Branch",
+            "affiliation-city": "Shahrood",
+            "affiliation-country": "Iran"
+          }
+        ],
+        "prism:aggregationType": "Journal",
+        "subtype": "ar",
+        "subtypeDescription": "Article",
+        "source-id": "21100466851",
+        "openaccess": "0",
+        "openaccessFlag": null
+      }
+    ]
+  }
+}
+```
