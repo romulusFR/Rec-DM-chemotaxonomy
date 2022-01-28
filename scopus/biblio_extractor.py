@@ -282,9 +282,9 @@ async def create_all_job(queue, df, *, with_margin=False):
     all_queries = list(generate_all_queries(df, with_margin=with_margin))
 
     # put them into the queue with a job number
-    for i, query in enumerate(all_queries):
+    for query in all_queries:
         await queue.put(query)
-        logger.debug("create_all_tasks(): job added #%i query=%s", i, query[-2:])
+        logger.debug("create_all_tasks() added query=%s", query[-2:])
 
     return len(all_queries)
 
@@ -304,15 +304,17 @@ async def create_all_job(queue, df, *, with_margin=False):
 #     return results
 
 
-async def execute_job(session, queue, results, task_factory, *, worker_delay=1, name=None):
+async def execute_job(session, queue, results_df, task_factory, *, worker_delay=1, name=None):
     """A (parallel) consumer that send a query to scopus and then add result to a dict"""
     jobs_done = 0
     try:
         while True:
             query = await queue.get()
-            (_, _, nb_results, duration) = await task_factory(session, query, delay=0)
-            logger.info("execute_job(id=%s): got %s from job %s after %f", name, nb_results, query[-2:], duration)
-            await asyncio.sleep(max(worker_delay - duration, 0))
+            result = await task_factory(session, query, delay=0)
+            (pos_kw, neg_kw, nb_results, duration) = result
+            # TODO :  reprise sur erreur, when nb_results is None
+            logger.info("execute_job(id=%s) got %s from job %s after %f", name, nb_results, query[-2:], duration)
+
             # if len(keywords) == 2:
             #     [chemo, pharma] = keywords
             #     res_dict[chemo][pharma] = nb_results
@@ -325,8 +327,9 @@ async def execute_job(session, queue, results, task_factory, *, worker_delay=1, 
             #     logger.warning("consume(id=%s): unable to deal with %i keywords %s", name, len(keywords), keywords)
             queue.task_done()
             jobs_done += 1
+            await asyncio.sleep(max(worker_delay - duration, 0))
     except asyncio.CancelledError:
-        logger.debug("task %s received cancel, done %i jobs", name, jobs_done)
+        logger.debug("execute_job() task %s received cancel, done %i jobs", name, jobs_done)
     return jobs_done
 
 
@@ -341,7 +344,7 @@ async def jobs_spawner(df: pd.DataFrame, task_factory, *, parallel_workers, work
 
     # on lance le producteur qui peuple la queue
     [nb_queries] = await asyncio.gather(producer_task)
-    logger.info("jobs_spawner(): producer added %i queries in the job queue", nb_queries)
+    logger.info("jobs_spawner() producer added %i queries in the job queue", nb_queries)
 
     # MAX_REQ_BY_SEC consummers that run in parallel and that can fire at most
     # one request per second
@@ -358,17 +361,17 @@ async def jobs_spawner(df: pd.DataFrame, task_factory, *, parallel_workers, work
             for i in range(1, parallel_workers + 1)
         ]
 
-        logger.info("jobs_spawner(): %i consumer tasks created", len(consumer_tasks))
+        logger.info("jobs_spawner() %i consumer tasks created", len(consumer_tasks))
 
         # on attend que tout soit traité, après que tout soit généré
         await jobs_queue.join()
-        logger.debug("jobs_spawner(): job queue is empty")
+        logger.debug("jobs_spawner() job queue is empty")
         # stop all consumer stuck waiting job from the queue if any
         for consumer in consumer_tasks:
             consumer.cancel()
             logger.debug("jobs_spawner() %s stopped", consumer.get_name())
         jobs_done = await asyncio.gather(*consumer_tasks)
-        logger.info("jobs_spawner(): nb of jobs done by each worker %s", jobs_done)
+        logger.info("jobs_spawner() nb of jobs done by each worker %s", jobs_done)
 
     # pending = asyncio.all_tasks()
     # logger.debug(pending)
@@ -393,11 +396,12 @@ def launcher(df: pd.DataFrame, *, with_margin=False):
     # logger.info("%i compounds X %i pharmacology = %i", len(compounds), len(activities), len(queries))
 
     launch_start_time = time.perf_counter()
-    logger.info("launcher(): starting asynchronous jobs")
+    logger.info("launcher() starting asynchronous jobs")
     task_factory = SEARCH_MODES.get(DEFAULT_SEARCH_MODE, SEARCH_MODES[DEFAULT_SEARCH_MODE])
 
     # correction bug scopus
     # results = asyncio.run(main_queue(queries, mode=mode))
+    # TODO : supprimer loop
     loop = asyncio.get_event_loop()
     main_task = loop.create_task(
         jobs_spawner(
@@ -409,13 +413,13 @@ def launcher(df: pd.DataFrame, *, with_margin=False):
         ),
         name="main-queue",
     )
-    logger.info("launcher(): launching jobs")
+    logger.info("launcher() launching all jobs (producer and consumers)")
     results_df = loop.run_until_complete(main_task)
-    
+
     # dataset.data = results
 
     total_time = time.perf_counter() - launch_start_time
-    logger.info("launcher(): all jobs done in %fs", total_time)
+    logger.info("launcher() all jobs done in %fs", total_time)
 
     # if not no_write:
     #     now = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -427,16 +431,16 @@ def launcher(df: pd.DataFrame, *, with_margin=False):
 
 
 if __name__ == "__main__":
-    logger.setLevel(logging.INFO)
+    logger.setLevel(logging.DEBUG)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    logger.info("output dir is '%s'", OUTPUT_DIR.absolute())
-    logger.info("Scopus API key %s", API_KEY)
+    logger.info("__main__ output dir is '%s'", OUTPUT_DIR.absolute())
+    logger.info("__main__ Scopus API key %s", API_KEY)
 
     dataset = load_data(TEST_DATA)
     all_compounds = list(dataset.index.get_level_values(1))
     all_activities = list(dataset.columns.get_level_values(1))
-    logger.debug("all compounds %s", all_compounds)
-    logger.debug("all activities %s", all_activities)
+    logger.debug("__main__ all compounds %s", all_compounds)
+    logger.debug("__main__ all activities %s", all_activities)
 
     results = launcher(dataset)
     print(results)
@@ -462,4 +466,7 @@ if __name__ == "__main__":
     # df.loc[("shs","sociology"), ("computer science", "web")] = 12
 
     # %%
-    # dataset2 = extend_df(dataset)
+    # results = extend_df(dataset)
+    # results.loc[("shs", "sociology"),("computer science", "web")]
+    # results.loc[("shs", "sociology", SELECTORS[0]),("computer science", "web", SELECTORS[0])] = 42
+    # results
