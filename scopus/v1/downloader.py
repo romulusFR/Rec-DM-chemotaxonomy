@@ -1,5 +1,5 @@
 """test de queries async à scopus via aoihttp"""
-# pylint: disable=unused-import
+# pylint: skip-file
 # %%
 
 import argparse
