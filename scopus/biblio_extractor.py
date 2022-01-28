@@ -76,13 +76,15 @@ TEST_DATA = Path("data/tests.csv")
 # I/O configuration
 CSV_PARAMS = {"sep": ";", "quotechar": '"'}
 ALT_SEP = "/"
-SELECTORS = ["w/", "w/o"]
+# ordered as bools
+SELECTORS = ["w/o", "w/"]
 MARGIN_SYMB = "Σ"
 CLASS_SYMB = "*"
 
-
+# a keyword is a fully index row or column identifier
+Keyword = tuple[str, str]
 # an aliases for queries : KW1, KW2, POS_KW, NEG_KW
-Query = tuple[list[str], list[str], list[str], list[str]]
+Query = tuple[list[Keyword], list[Keyword], list[Keyword], list[Keyword], tuple[bool, bool]]
 
 
 def load_data(file: str | Path):
@@ -129,7 +131,7 @@ def extend_df(df: pd.DataFrame, *, with_margin=False) -> pd.DataFrame:
     return pd.DataFrame(index=extended_rows, columns=extended_cols)
 
 
-def clausal_query(compounds, activities, pos_kw: list[str], neg_kw: list[str]) -> str:
+def clausal_query(query: Query) -> str:
     """Build a logical clause of the following form:
 
         (c_1 \/ ... \/ c_m)
@@ -147,16 +149,13 @@ def clausal_query(compounds, activities, pos_kw: list[str], neg_kw: list[str]) -
         base = f" {operator} ".join(f'KEY("{name}")' for name in string.split(ALT_SEP))
         return f"({base})"
 
-    # disjuncts = [slashes_to_or(kws) for kws in keywords]
-    # KEY ( {disjunct1} ) AND KEY ( {disjunct2} )
+    compounds, activities, pos_kw, neg_kw, kind = query
 
-    # compounds = df.index.get_level_values(1)
-    # activities = df.columns.get_level_values(1)
-
-    all_compounds_clause = " OR ".join(split_alts(compound) for compound in compounds)
-    all_ativities_clause = " OR ".join(split_alts(activity) for activity in activities)
-    positive_clause = " AND ".join(split_alts(kw) for kw in pos_kw)
-    negative_clause = " OR ".join(split_alts(kw) for kw in neg_kw)
+    # we only keep the last item [-1] of keywords, i.e., we discard their classes in queries
+    all_compounds_clause = " OR ".join(split_alts(compound[-1]) for compound in compounds)
+    all_ativities_clause = " OR ".join(split_alts(activity[-1]) for activity in activities)
+    positive_clause = " AND ".join(split_alts(kw[-1]) for kw in pos_kw)
+    negative_clause = " OR ".join(split_alts(kw[-1]) for kw in neg_kw)
 
     clauses = " AND ".join(
         f"({clause})" for clause in [all_compounds_clause, all_ativities_clause, positive_clause] if clause
@@ -175,11 +174,13 @@ async def fake_search(_, query: Query, *, delay=0):
     """Fake query tool without network, for test purpose"""
     await asyncio.sleep(delay)
     start_time = time.perf_counter()
-    logger.debug("fake_search(%s)", query[-2:])
+    clause = clausal_query(query)
+    logger.debug("fake_search(%s)", query[-3:])
+    logger.debug("               %s", clause)
     results_nb = randint(1, 10000)
     await asyncio.sleep(randint(1, 1000) / 1000)
     elapsed = time.perf_counter() - start_time
-    return query[-2], query[-1], results_nb, elapsed
+    return results_nb, elapsed
 
 
 async def httpbin_search(session, query: Query, *, delay=0, error_rate=1):
@@ -193,8 +194,8 @@ async def httpbin_search(session, query: Query, *, delay=0, error_rate=1):
     results_nb = None
     await asyncio.sleep(delay)
     start_time = time.perf_counter()
-    logger.debug("httpbin_search(%s)", query[-2:])
-    json_query = wrap_scopus(clausal_query(*query))
+    logger.debug("httpbin_search(%s)", query[-3:])
+    json_query = wrap_scopus(clausal_query(query))
 
     try:
         # async with aiohttp.ClientSession(raise_for_status=True) as session:
@@ -205,8 +206,8 @@ async def httpbin_search(session, query: Query, *, delay=0, error_rate=1):
         logger.warning("aiohttp.ClientResponseError #%i: %s", err.status, err.message)
     finally:
         elapsed = time.perf_counter() - start_time
-    logger.debug("httpbin_search(%s)=%i in %f sec", query[-2:], results_nb, elapsed)
-    return query[-2], query[-1], results_nb, elapsed
+    logger.debug("httpbin_search(%s)=%i in %f sec", query[-3:], results_nb, elapsed)
+    return results_nb, elapsed
 
 
 def wrap_scopus(string: str):
@@ -223,8 +224,8 @@ async def scopus_search(session, query: Query, *, delay=0):
 
     await asyncio.sleep(delay)
     start_time = time.perf_counter()
-    logger.debug("scopus_search(%s)", query[-2:])
-    json_query = wrap_scopus(clausal_query(*query))
+    logger.debug("scopus_search(%s)", query[-3:])
+    json_query = wrap_scopus(clausal_query(query))
     try:
         # async with aiohttp.ClientSession(raise_for_status=True) as session:
         async with session.get(scopus_url, params=json_query, headers=API_KEY, ssl=SSL_CONTEXT) as resp:
@@ -235,8 +236,8 @@ async def scopus_search(session, query: Query, *, delay=0):
         logger.warning("aiohttp.ClientResponseError #%i: %s", err.status, err.message)
     finally:
         elapsed = time.perf_counter() - start_time
-    logger.debug("scopus_search(%s)=%i in %f sec", query[-2:], results_nb, elapsed)
-    return query[-2], query[-1], results_nb, elapsed
+    logger.debug("scopus_search(%s)=%i in %f sec", query[-3:], results_nb, elapsed)
+    return results_nb, elapsed
 
 
 # query modes : one fake, one fake over network, one true
@@ -246,34 +247,37 @@ DEFAULT_SEARCH_MODE = "fake"
 
 def generate_all_queries(data: pd.DataFrame, *, with_margin=False):
     """Generate all values to fill the contengency table"""
-    compounds = list(data.index.get_level_values(1))
-    activities = list(data.columns.get_level_values(1))
+    # compounds = list(data.index.get_level_values(1))
+    # activities = list(data.columns.get_level_values(1))
+
+    compounds = data.index.to_list()
+    activities = data.columns.to_list()
 
     # the main content : 4 x |KW1| x |KW2| cells
     for compound in compounds:
         for activity in activities:
             # both the compound and the activity
-            yield ([], [], [compound, activity], [])
+            yield ([], [], [compound, activity], [], (True, True))
             # the activity but not this compound (but at least one another in the domain)
-            yield (compounds, [], [activity], [compound])
+            yield (compounds, [], [activity], [compound], (False, True))
             # the compound but not this activity (but at least one another in the domain)
-            yield ([], activities, [compound], [activity])
+            yield ([], activities, [compound], [activity], (True, False))
             # neither the compound nor the activity (but stil in the domain)
-            yield (compounds, activities, [], [compound, activity])
+            yield (compounds, activities, [], [compound, activity], (False, False))
 
     # adds extra rows/columns for marginal sums (an extra row and an extra column for total)
     # this should add 4 x (|KW1| + |KW2| + 1) but we exclude 2 + 2 + 3 degenerated combinations which always are 0
     if with_margin:
         # rows margin sums, -2 always 0
         for compound in compounds:
-            yield ([], activities, [compound], [])
-            yield (compounds, activities, [], [compound])
+            yield ([], activities, [compound], [], (True, None))
+            yield (compounds, activities, [], [compound], (False, None))
         # cols margin sums, -2 always 0
         for activity in activities:
-            yield (compounds, [], [activity], [])
-            yield (compounds, activities, [], [activity])
+            yield (compounds, [], [activity], [], (None, True))
+            yield (compounds, activities, [], [activity], (None, False))
         # total margin sum, -3 always 0
-        yield (compounds, activities, [], [])
+        yield (compounds, activities, [], [], (None, None))
 
 
 async def create_all_job(queue, df, *, with_margin=False):
@@ -284,7 +288,7 @@ async def create_all_job(queue, df, *, with_margin=False):
     # put them into the queue with a job number
     for query in all_queries:
         await queue.put(query)
-        logger.debug("create_all_tasks() added query=%s", query[-2:])
+        logger.debug("create_all_tasks() added query=%s", query[-3:])
 
     return len(all_queries)
 
@@ -311,9 +315,38 @@ async def execute_job(session, queue, results_df, task_factory, *, worker_delay=
         while True:
             query = await queue.get()
             result = await task_factory(session, query, delay=0)
-            (pos_kw, neg_kw, nb_results, duration) = result
+            nb_results, duration = result
             # TODO :  reprise sur erreur, when nb_results is None
-            logger.info("execute_job(id=%s) got %s from job %s after %f", name, nb_results, query[-2:], duration)
+            logger.info("execute_job(id=%s) got %s from job %s after %f", name, nb_results, query[-3:], duration)
+            pos_kw, neg_kw, kind = query[-3:]
+            if kind == (True, True):
+                results_df.loc[(*pos_kw[0], SELECTORS[True]), (*pos_kw[1], SELECTORS[True])] = nb_results
+            elif kind == (True, False):
+                results_df.loc[(*pos_kw[0], SELECTORS[True]), (*neg_kw[0], SELECTORS[False])] = nb_results
+            elif kind == (False, True):
+                results_df.loc[(*neg_kw[0], SELECTORS[False]), (*pos_kw[0], SELECTORS[True])] = nb_results
+            elif kind == (False, False):
+                results_df.loc[(*neg_kw[0], SELECTORS[False]), (*neg_kw[1], SELECTORS[False])] = nb_results
+            else:
+                raise ValueError(f"{len(pos_kw) = }, {len(neg_kw) = } for {kind = } should not arise")
+                # logger.error(f"{len(pos_kw) = }, {len(neg_kw) = } for {kind = } should not arise")
+
+            # match (len(pos_kw), len(neg_kw)):
+            #     case (2,0):
+            #         print(SELECTORS[0], SELECTORS[0])
+            #     case (0,2):
+            #         print(SELECTORS[1], SELECTORS[1])
+            #     case (1,1):
+            #         print(SELECTORS[0], SELECTORS[1])
+            #         print(SELECTORS[1], SELECTORS[0])
+            #     case (1,0):
+            #         print(SELECTORS[0], MARGIN_SYMB)
+            #     case (0,1):
+            #         print(SELECTORS[1], MARGIN_SYMB)
+            #     case(0,0):
+            #         print(MARGIN_SYMB, MARGIN_SYMB)
+            #     case _:
+            #         raise ValueError(f"{len(pos_kw) = }, {len(neg_kw) = } should not arise")
 
             # if len(keywords) == 2:
             #     [chemo, pharma] = keywords
