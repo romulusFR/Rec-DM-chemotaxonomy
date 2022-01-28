@@ -14,21 +14,23 @@ We want to analyse the dependencies between the two sets keywords using techniqu
 To do so, this program creates and fill specific kind of contingency table such as follows :
 
                 germination germination cytotoxicity    cytotoxicity
-                w/          w/          w/              w/o
-acridine    w/  U_11        V_11        U_12            V_12
-acridine    w/o X_11        Y_11        X_12            Y_12
-triterpene  w/  U_21        V_21        U_22            V_22
-triterpene  w/o X_21        Y_21        X_22            Y_22
+                w/o         w/          w/o             w/
+acridine    w/o U_11        V_11        U_12            V_12
+acridine    w/  X_11        Y_11        X_12            Y_12
+triterpene  w/o U_21        V_21        U_22            V_22
+triterpene  w/  X_21        Y_21        X_22            Y_22
 
 Where for each couple (kw_i, kw_j) in KW1xKW2, the submatrix [U,V][X,Y] gives :
 
-- U = the number of papers that have both (kw1, kw2) as keywords
-- V = the number of papers that have kw1 but NOT kw2 as keywords
-- X = the number of papers that have kw2 but NOT kw1 as keywords
-- Y = the number of papers that have NEITHER kw1 NOR kw2 as keywords
+- U = (False, False) : the number of papers that have NEITHER kw1 NOR kw2 as keywords
+- V = (False, True)  : the number of papers that have kw2 but NOT kw1 as keywords
+- X = (True, False)  : the number of papers that have kw1 but NOT kw2 as keywords
+- Y = (True, True)   :the number of papers that have BOTH kw1 AND kw2 as keywords
+
 
 We restrict the analysis to the domain D, which is the set of paper that have at least one keyword in KW1 and at least one in KW2.
 So, by contruction each submatrix [U,V][X,Y] is such that U + V + X + Y  = |D|
+Moreover U + V is a constant for each kw1 and U + V is a constant for each kw2.
 """
 # pylint: enable=line-too-long
 
@@ -37,7 +39,7 @@ So, by contruction each submatrix [U,V][X,Y] is such that U + V + X + Y  = |D|
 # TODO : gérer les tâches qui plantent
 
 import asyncio
-from functools import wraps
+from functools import wraps, partial
 from itertools import product
 import logging
 import ssl
@@ -83,6 +85,12 @@ SELECTORS = ["w/o", "w/"]
 MARGIN_SYMB = "Σ"
 CLASS_SYMB = "*"
 
+
+# query modes : one fake, one fake over network, one true
+# SEARCH_MODES = {"scopus": scopus_search, "httpbin": httpbin_search, "fake": fake_search}
+# DEFAULT_SEARCH_MODE = "fake"
+
+
 # a keyword is a fully index row or column identifier
 Keyword = tuple[str, str]
 # an aliases for queries : KW1, KW2, POS_KW, NEG_KW
@@ -109,7 +117,7 @@ def load_data(file: str | Path):
     return df
 
 
-def extend_df(df: pd.DataFrame, *, with_margin=False) -> pd.DataFrame:
+def extend_df(df: pd.DataFrame) -> pd.DataFrame:
     """Add extra indexes as last level of rows and columns.
 
     Index and columns are multi-level indexes. We duplicate each key to have
@@ -118,22 +126,20 @@ def extend_df(df: pd.DataFrame, *, with_margin=False) -> pd.DataFrame:
     In the end, the orginal KW1 x KW2 matrix is transformed to a 4 x KW1 x KW2 one
     each original celle [m] being now a 2x2 submatrix [U, V][X, Y]
 
-    If margin are added, a  4 x (KW1 + 1) x (KW2 + 1) is constructed
+    OBSOLETE : if margin are added, a  4 x (KW1 + 1) x (KW2 + 1) is constructed
     """
     df2 = pd.DataFrame().reindex_like(df)
 
-    if with_margin:
-        margin_row = pd.DataFrame(index=pd.MultiIndex.from_tuples([(CLASS_SYMB, MARGIN_SYMB)]), columns=df.columns)
+    # if with_margin:
 
-        margin_col = pd.DataFrame(columns=pd.MultiIndex.from_tuples([(CLASS_SYMB, MARGIN_SYMB)]), index=df.columns)
+    # margin_row = pd.DataFrame(index=pd.MultiIndex.from_tuples([(CLASS_SYMB, MARGIN_SYMB)]), columns=df.columns)
+    # df2 = pd.concat([df2, margin_row], axis=0)
+    # margin_col = pd.DataFrame(index=df.columns, columns=pd.MultiIndex.from_tuples([(CLASS_SYMB, MARGIN_SYMB)]))
+    # df2 = pd.concat([df2, margin_col], axis=1)
 
-        df2 = pd.concat([df2, margin_col], axis=1)
-        df2 = pd.concat([df2, margin_row], axis=0)
-
-
-        # df2 = df2.append(margin_row)
-        # df2[(CLASS_SYMB, MARGIN_SYMB)] = None
-        # df2[(CLASS_SYMB, MARGIN_SYMB)] = df2[(CLASS_SYMB, MARGIN_SYMB)].astype(int)
+    # df2 = df2.append(margin_row)
+    # df2[(CLASS_SYMB, MARGIN_SYMB)] = None
+    # df2[(CLASS_SYMB, MARGIN_SYMB)] = df2[(CLASS_SYMB, MARGIN_SYMB)].astype(int)
 
     extended_rows = pd.MultiIndex.from_tuples((cls, val, s) for (cls, val) in df2.index for s in SELECTORS)
     extended_cols = pd.MultiIndex.from_tuples((cls, val, s) for (cls, val) in df2.columns for s in SELECTORS)
@@ -161,7 +167,7 @@ def clausal_query(query: Query) -> str:
         base = f" {operator} ".join(f'KEY("{name}")' for name in string.split(ALT_SEP))
         return f"({base})"
 
-    compounds, activities, pos_kw, neg_kw, kind = query
+    compounds, activities, pos_kw, neg_kw, _ = query
 
     # we only keep the last item [-1] of keywords, i.e., we discard their classes in queries
     all_compounds_clause = " OR ".join(split_alts(compound[-1]) for compound in compounds)
@@ -248,13 +254,8 @@ async def scopus_search(session, query: Query, *, delay=0):
         logger.warning("aiohttp.ClientResponseError #%i: %s", err.status, err.message)
     finally:
         elapsed = time.perf_counter() - start_time
-    logger.debug("scopus_search(%s)=%i in %f sec", query[-3:], results_nb, elapsed)
+    logger.debug("scopus_search(%s)=%s in %f sec", query[-3:], results_nb, elapsed)
     return results_nb, elapsed
-
-
-# query modes : one fake, one fake over network, one true
-SEARCH_MODES = {"scopus": scopus_search, "httpbin": httpbin_search, "fake": fake_search}
-DEFAULT_SEARCH_MODE = "fake"
 
 
 def generate_all_queries(data: pd.DataFrame, *, with_margin=False):
@@ -326,9 +327,8 @@ async def execute_job(session, queue, results_df, task_factory, *, worker_delay=
     try:
         while True:
             query = await queue.get()
-            result = await task_factory(session, query, delay=0)
-            nb_results, duration = result
-            # TODO :  reprise sur erreur, when nb_results is None
+            nb_results, duration = await task_factory(session, query, delay=0)
+
             logger.info("execute_job(id=%s) got %s from job %s after %f", name, nb_results, query[-3:], duration)
             pos_kw, neg_kw, kind = query[-3:]
             if kind == (True, True):
@@ -353,20 +353,33 @@ async def execute_job(session, queue, results_df, task_factory, *, worker_delay=
                 ] = nb_results
             else:
                 # raise ValueError(f"{len(pos_kw) = }, {len(neg_kw) = } for {kind = } should not arise")
-                logger.error(f"{len(pos_kw) = }, {len(neg_kw) = } for {kind = } should not arise")
+                logger.error(
+                    "execute_job(id=%s): len(pos_kw) = %i, len(neg_kw) = %i should not arise for kind = %s",
+                    name,
+                    len(pos_kw),
+                    len(neg_kw),
+                    kind,
+                )
             queue.task_done()
             jobs_done += 1
+
+            # add the same query again in the job queue to retry it
+            if nb_results is None:
+                await queue.put(query)
+                logger.error("execute_job(id=%s) added back %s to the queue", name, query[-3:])
+
             await asyncio.sleep(max(worker_delay - duration, 0))
     except asyncio.CancelledError:
         logger.debug("execute_job() task %s received cancel, done %i jobs", name, jobs_done)
     return jobs_done
 
 
-async def jobs_spawner(df: pd.DataFrame, task_factory, *, parallel_workers, worker_delay, with_margin):
+async def jobs_spawner(df: pd.DataFrame, *, task_factory, parallel_workers, worker_delay, with_margin):
     """Create tasks in a queue which is emptied in parallele ensuring at most MAX_REQ_BY_SEC requests per second"""
     jobs_queue: asyncio.Queue = asyncio.Queue()
     # res_dict: defaultdict = defaultdict(dict)
-    logger.info("jobs_spawner(_, %s, %i, _, _)", task_factory.__name__, parallel_workers)
+    # task_factory.__name__
+    logger.info("jobs_spawner(): task_factory=%s, parallel_workers=%i", task_factory.__name__, parallel_workers)
 
     # ONE producer task to fill the queue
     producer_task = asyncio.create_task(create_all_job(jobs_queue, df, with_margin=with_margin), name="producer")
@@ -413,7 +426,7 @@ DEFAULT_WORKER_DELAY = 1.0
 DEFAULT_SAMPLES = None
 
 
-def launcher(df: pd.DataFrame, *, with_margin=False):
+def launcher(df: pd.DataFrame, *, task_factory=fake_search, with_margin=False):
     """Launch the batch of downloads"""
     # compounds = dataset.compounds.keys()
     # activities = dataset.activities.keys()
@@ -426,7 +439,7 @@ def launcher(df: pd.DataFrame, *, with_margin=False):
 
     launch_start_time = time.perf_counter()
     logger.info("launcher() starting asynchronous jobs")
-    task_factory = SEARCH_MODES.get(DEFAULT_SEARCH_MODE, SEARCH_MODES[DEFAULT_SEARCH_MODE])
+    # task_factory = SEARCH_MODES.get("scopus", SEARCH_MODES[DEFAULT_SEARCH_MODE])
 
     # correction bug scopus
     # results = asyncio.run(main_queue(queries, mode=mode))
@@ -440,7 +453,7 @@ def launcher(df: pd.DataFrame, *, with_margin=False):
             worker_delay=DEFAULT_WORKER_DELAY,
             with_margin=with_margin,
         ),
-        name="main-queue",
+        name="jobs_spawner",
     )
     logger.info("launcher() launching all jobs (producer and consumers)")
     results_df = loop.run_until_complete(main_task)
@@ -456,12 +469,12 @@ def launcher(df: pd.DataFrame, *, with_margin=False):
     #     write_chemo_activities(output_filename, dataset)
     #     logger.info("WRITTEN %s", output_filename)
 
-    return results_df
+    return results_df.astype("Int64")
 
 
 # %%
 if __name__ == "__main__":
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(logging.INFO)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     logger.info("__main__ output dir is '%s'", OUTPUT_DIR.absolute())
     logger.info("__main__ Scopus API key %s", API_KEY)
@@ -472,7 +485,10 @@ if __name__ == "__main__":
     logger.debug("__main__ all compounds %s", all_compounds)
     logger.debug("__main__ all activities %s", all_activities)
 
-    results = launcher(dataset, with_margin=True)
+
+    task_factory=partial(httpbin_search, error_rate=50)
+    # task_factory.__name__ = httpbin_search.__name__
+    results = launcher(dataset, task_factory=httpbin_search)
     print(results)
     print(results.info())
 
