@@ -1,4 +1,5 @@
 # pylint: disable=unused-import,anomalous-backslash-in-string
+# pylint: disable=line-too-long
 """Generate queries and summarizes number of articles from bibliographical DB (e.g., Scopus)
 
 The general idea is to have TWO disjoint finite sets of keywords such as :
@@ -28,12 +29,13 @@ Where for each couple (kw_i, kw_j) in KW1xKW2, the submatrix [U,V][X,Y] gives :
 
 We restrict the analysis to the domain D, which is the set of paper that have at least one keyword in KW1 and at least one in KW2.
 So, by contruction each submatrix [U,V][X,Y] is such that U + V + X + Y  = |D|
-
 """
+# pylint: enable=line-too-long
 
 # %%
 
 import asyncio
+from itertools import product
 import logging
 import ssl
 import time
@@ -47,9 +49,12 @@ from dotenv import load_dotenv
 
 # take environment variables from .env.
 # MUST DEFINE API_KEY with apy key from
-logging.basicConfig()
-logger = logging.getLogger("biblio.extractor")
 load_dotenv()
+
+if __name__ == "__main__":
+    logging.basicConfig()
+
+logger = logging.getLogger(f"CHEMOTAXO.{__name__}")
 
 # Scopus API
 API_KEY = {"X-ELS-APIKey": environ.get("API_KEY", "no-elsevier-api-key-defined")}
@@ -69,6 +74,8 @@ TEST_DATA = Path("data/tests.csv")
 CSV_PARAMS = {"sep": ";", "quotechar": '"'}
 ALT_SEP = "/"
 SELECTORS = ["w/", "w/o"]
+MARGIN_SYMB = "Σ"
+CLASS_SYMB = "*"
 
 
 def load_data(file: str | Path):
@@ -119,8 +126,8 @@ def clausal_query(compounds, activities, pos_kw: list[str], neg_kw: list[str]):
     Keywords taht contain alternatives are normalized
     """
 
-    def split_alts(string, op="OR"):
-        base = f" {op} ".join(f'KEY("{name}")' for name in string.split(ALT_SEP))
+    def split_alts(string, operator="OR"):
+        base = f" {operator} ".join(f'KEY("{name}")' for name in string.split(ALT_SEP))
         return f"({base})"
 
     # disjuncts = [slashes_to_or(kws) for kws in keywords]
@@ -138,20 +145,18 @@ def clausal_query(compounds, activities, pos_kw: list[str], neg_kw: list[str]):
         f"({clause})" for clause in [all_compounds_clause, all_ativities_clause, positive_clause] if clause
     )
 
-    if not (clauses):
+    if not clauses:
         raise IndexError("at least one positive clause must be non-empty")
 
     if negative_clause:
         clauses += f" AND NOT ({negative_clause})"
 
-    # return all_compounds_clause, all_ativities_clause, positive_clause, negative_clause
-    # return f"({all_compounds_clause}) AND ({all_ativities_clause}) AND ({positive_clause}) AND NOT ({negative_clause})"
-
     return clauses
 
 
 def wrap_scopus(string: str):
-    if not (string):
+    """Wraps a string query into an object to be sent as JSON over Scopus API"""
+    if not string:
         raise ValueError("string must be non-empty")
     return {"query": f'DOCTYPE("ar") AND {string}', "count": 1}
 
@@ -181,6 +186,7 @@ async def query_scopus(json_query, delay=0):
 
 
 async def do_async(query):
+    """Launch aysync job"""
     # loop = asyncio.get_event_loop()
     # # async with aiohttp.ClientSession(raise_for_status=True) as session:
     # main_task = loop.create_task(asyncio.sleep(2), name="main-queue")
@@ -223,15 +229,48 @@ def generate_all_queries(data: pd.DataFrame, with_margin=False):
         yield (compounds, activities, [], [])
 
 
+def extend_df(df: pd.DataFrame, with_margin=False) -> pd.DataFrame:
+    """Add extra indexes as last level of rows and columns.
+
+    Index and columns are multi-level indexes. We duplicate each key to have
+    an extra [w/, w/o] index level at the finest level.
+
+    In the end, the orginal KW1 x KW2 matrix is transformed to a 4 x KW1 x KW2 one
+    each original celle [m] being now a 2x2 submatrix [U, V][X, Y]
+
+    If margin are added, a  4 x (KW1 + 1) x (KW2 + 1) is constructed
+    """
+    df2 = pd.DataFrame().reindex_like(df)
+
+    if with_margin:
+        margin_row = pd.DataFrame(index=pd.MultiIndex.from_tuples([(CLASS_SYMB, MARGIN_SYMB)]), columns=df.columns)
+        df2 = df2.append(margin_row)
+        df2[(CLASS_SYMB, MARGIN_SYMB)] = None
+
+    extended_rows = pd.MultiIndex.from_tuples((cls, val, s) for (cls, val) in df2.index for s in SELECTORS)
+    extended_cols = pd.MultiIndex.from_tuples((cls, val, s) for (cls, val) in df2.columns for s in SELECTORS)
+
+    return pd.DataFrame(index=extended_rows, columns=extended_cols)
+
+    # df2 = pd.DataFrame(index=mrows, columns=mcols)
+
+    # if with_margin:
+    #     margin_rows = pd.DataFrame(index=mrows, columns=pd.MultiIndex.from_tuples(product(["Σ"], SELECTORS)))
+    #     margin_cols = pd.DataFrame(index=mcols, columns=pd.MultiIndex.from_tuples(product(["Σ"], SELECTORS)))
+    #     df2 = pd.concat([df2, margin_rows])
+
+    # return df2
+
+
 if __name__ == "__main__":
     logger.setLevel(logging.DEBUG)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     logger.info("output dir is '%s'", OUTPUT_DIR.absolute())
     logger.info("Scopus API key %s", API_KEY)
 
-    df = load_data(TEST_DATA)
-    all_compounds = list(df.index.get_level_values(1))
-    all_activities = list(df.columns.get_level_values(1))
+    dataset = load_data(TEST_DATA)
+    all_compounds = list(dataset.index.get_level_values(1))
+    all_activities = list(dataset.columns.get_level_values(1))
     logger.debug("all compounds %s", all_compounds)
     logger.debug("all activities %s", all_activities)
 
@@ -242,7 +281,7 @@ if __name__ == "__main__":
     # res = asyncio.run(do_async(wrap_scopus_query(cnf)))
     # print(res)
 
-    all_queries = list(generate_all_queries(df))
+    all_queries = list(generate_all_queries(dataset))
     # pprint(all_queries)
     logger.info("total number of queries: %i", len(all_queries))
     # print(res[0]["search-results"]["entry"][0])
@@ -255,18 +294,4 @@ if __name__ == "__main__":
     # df.loc[("shs","sociology"), ("computer science", "web")] = 12
 
     # %%
-
-    def extend_df(df: pd.DataFrame):
-        mrows = pd.MultiIndex.from_tuples((cls, val, s) for (cls, val) in df.index for s in SELECTORS)
-        mcols = pd.MultiIndex.from_tuples((cls, val, s) for (cls, val) in df.columns for s in SELECTORS)
-
-        return pd.DataFrame(index=mrows, columns=mcols)
-
-    df2 = extend_df(df)
-
-    df2.iloc[df2.index.get_level_values(2) == SELECTORS[0]]
-
-    # margin_rows = pd.DataFrame(index=mrows, columns=pd.MultiIndex.from_tuples([("Σ","","w/"), ("Σ","","w/o")]))
-    # pd.concat([df2, margin_rows])
-
-    # %%
+    dataset2 = extend_df(dataset)
