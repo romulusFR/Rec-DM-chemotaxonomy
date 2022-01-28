@@ -34,6 +34,8 @@ So, by contruction each submatrix [U,V][X,Y] is such that U + V + X + Y  = |D|
 
 # %%
 
+# TODO : gérer les tâches qui plantent
+
 import asyncio
 from functools import wraps
 from itertools import product
@@ -122,13 +124,23 @@ def extend_df(df: pd.DataFrame, *, with_margin=False) -> pd.DataFrame:
 
     if with_margin:
         margin_row = pd.DataFrame(index=pd.MultiIndex.from_tuples([(CLASS_SYMB, MARGIN_SYMB)]), columns=df.columns)
-        df2 = df2.append(margin_row)
-        df2[(CLASS_SYMB, MARGIN_SYMB)] = None
+
+        margin_col = pd.DataFrame(columns=pd.MultiIndex.from_tuples([(CLASS_SYMB, MARGIN_SYMB)]), index=df.columns)
+
+        df2 = pd.concat([df2, margin_col], axis=1)
+        df2 = pd.concat([df2, margin_row], axis=0)
+
+
+        # df2 = df2.append(margin_row)
+        # df2[(CLASS_SYMB, MARGIN_SYMB)] = None
+        # df2[(CLASS_SYMB, MARGIN_SYMB)] = df2[(CLASS_SYMB, MARGIN_SYMB)].astype(int)
 
     extended_rows = pd.MultiIndex.from_tuples((cls, val, s) for (cls, val) in df2.index for s in SELECTORS)
     extended_cols = pd.MultiIndex.from_tuples((cls, val, s) for (cls, val) in df2.columns for s in SELECTORS)
 
-    return pd.DataFrame(index=extended_rows, columns=extended_cols)
+    # https://pandas.pydata.org/pandas-docs/stable/user_guide/integer_na.html
+    extended_df = pd.DataFrame(index=extended_rows, columns=extended_cols).astype("Int64")
+    return extended_df
 
 
 def clausal_query(query: Query) -> str:
@@ -327,37 +339,21 @@ async def execute_job(session, queue, results_df, task_factory, *, worker_delay=
                 results_df.loc[(*neg_kw[0], SELECTORS[False]), (*pos_kw[0], SELECTORS[True])] = nb_results
             elif kind == (False, False):
                 results_df.loc[(*neg_kw[0], SELECTORS[False]), (*neg_kw[1], SELECTORS[False])] = nb_results
+            elif kind == (True, None):
+                results_df.loc[(*pos_kw[0], SELECTORS[True]), (CLASS_SYMB, MARGIN_SYMB, SELECTORS[True])] = nb_results
+            elif kind == (False, None):
+                results_df.loc[(*neg_kw[0], SELECTORS[False]), (CLASS_SYMB, MARGIN_SYMB, SELECTORS[True])] = nb_results
+            elif kind == (None, True):
+                results_df.loc[(CLASS_SYMB, MARGIN_SYMB, SELECTORS[True]), (*pos_kw[0], SELECTORS[True])] = nb_results
+            elif kind == (None, False):
+                results_df.loc[(CLASS_SYMB, MARGIN_SYMB, SELECTORS[True]), (*neg_kw[0], SELECTORS[False])] = nb_results
+            elif kind == (None, None):
+                results_df.loc[
+                    (CLASS_SYMB, MARGIN_SYMB, SELECTORS[True]), (CLASS_SYMB, MARGIN_SYMB, SELECTORS[True])
+                ] = nb_results
             else:
-                raise ValueError(f"{len(pos_kw) = }, {len(neg_kw) = } for {kind = } should not arise")
-                # logger.error(f"{len(pos_kw) = }, {len(neg_kw) = } for {kind = } should not arise")
-
-            # match (len(pos_kw), len(neg_kw)):
-            #     case (2,0):
-            #         print(SELECTORS[0], SELECTORS[0])
-            #     case (0,2):
-            #         print(SELECTORS[1], SELECTORS[1])
-            #     case (1,1):
-            #         print(SELECTORS[0], SELECTORS[1])
-            #         print(SELECTORS[1], SELECTORS[0])
-            #     case (1,0):
-            #         print(SELECTORS[0], MARGIN_SYMB)
-            #     case (0,1):
-            #         print(SELECTORS[1], MARGIN_SYMB)
-            #     case(0,0):
-            #         print(MARGIN_SYMB, MARGIN_SYMB)
-            #     case _:
-            #         raise ValueError(f"{len(pos_kw) = }, {len(neg_kw) = } should not arise")
-
-            # if len(keywords) == 2:
-            #     [chemo, pharma] = keywords
-            #     res_dict[chemo][pharma] = nb_results
-            #     logger.debug("consume(id=%s): (%s,%s)=%i added)", name, chemo, pharma, nb_results)
-            # elif len(keywords) == 1:
-            #     [item] = keywords
-            #     res_dict[item] = nb_results
-            #     logger.debug("consume(id=%s): (%s,)=%i added)", name, item, nb_results)
-            # else:
-            #     logger.warning("consume(id=%s): unable to deal with %i keywords %s", name, len(keywords), keywords)
+                # raise ValueError(f"{len(pos_kw) = }, {len(neg_kw) = } for {kind = } should not arise")
+                logger.error(f"{len(pos_kw) = }, {len(neg_kw) = } for {kind = } should not arise")
             queue.task_done()
             jobs_done += 1
             await asyncio.sleep(max(worker_delay - duration, 0))
@@ -463,6 +459,7 @@ def launcher(df: pd.DataFrame, *, with_margin=False):
     return results_df
 
 
+# %%
 if __name__ == "__main__":
     logger.setLevel(logging.DEBUG)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -475,8 +472,9 @@ if __name__ == "__main__":
     logger.debug("__main__ all compounds %s", all_compounds)
     logger.debug("__main__ all activities %s", all_activities)
 
-    results = launcher(dataset)
+    results = launcher(dataset, with_margin=True)
     print(results)
+    print(results.info())
 
     # print(df.columns.get_level_values(1))
     # print(cnf)
