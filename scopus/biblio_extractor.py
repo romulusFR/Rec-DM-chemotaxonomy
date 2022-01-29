@@ -29,25 +29,26 @@ Where for each couple (kw_i, kw_j) in KW1xKW2, the submatrix [U,V][X,Y] gives :
 
 
 We restrict the analysis to the domain D, which is the set of paper that have at least one keyword in KW1 and at least one in KW2.
-So, by contruction each submatrix [U,V][X,Y] is such that U + V + X + Y  = |D|
-Moreover U + V is a constant for each kw1 and U + V is a constant for each kw2.
+By construction:
+- U + V and X + Y are constants for each kw1 (whatever the choice of kw2)
+- U + X and V + Y are constants for each kw2 (whatever the choice of kw1)
+Moreover each submatrix [U,V][X,Y] is such that U + V + X + Y  = |D|.
+
 """
 # pylint: enable=line-too-long
 
 # %%
 
-# TODO : gérer les tâches qui plantent
-
 import asyncio
-from functools import wraps, partial
-from itertools import product
 import logging
 import ssl
-from random import randint
 import time
+from collections import defaultdict
+from functools import partial, wraps
+from itertools import product
 from os import environ
 from pathlib import Path
-from collections import defaultdict
+from random import randint, sample
 
 import aiohttp
 import certifi
@@ -68,32 +69,29 @@ API_KEY = {"X-ELS-APIKey": environ.get("API_KEY", "no-elsevier-api-key-defined")
 X_RATE_HEADERS = ["X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"]
 SSL_CONTEXT = ssl.create_default_context(cafile=certifi.where())
 
-# Output
-OUTPUT_DIR = Path("results")
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-# Input
+# Input samples
 INPUT_DATA = Path("data/activities.csv")
 SAMPLE_DATA = Path("data/samples.csv")
 TEST_DATA = Path("data/tests.csv")
 
-# I/O configuration
+# I/O and string configuration
 CSV_PARAMS = {"sep": ";", "quotechar": '"'}
 ALT_SEP = "/"
-# ordered as bools
-SELECTORS = ["w/o", "w/"]
+SELECTORS = ["w/o", "w/"]  # ordered as bools
 MARGIN_SYMB = "Σ"
 CLASS_SYMB = "*"
 
 
-# query modes : one fake, one fake over network, one true
-# SEARCH_MODES = {"scopus": scopus_search, "httpbin": httpbin_search, "fake": fake_search}
-# DEFAULT_SEARCH_MODE = "fake"
-
+# Default parameters
+DEFAULT_PARALLEL_WORKERS = 8  # number of parallel jobs
+DEFAULT_WORKER_DELAY = 1.0  # at most one req / sec
+DEFAULT_SAMPLES = None  # no sampling
 
 # a keyword is a fully index row or column identifier
 Keyword = tuple[str, str]
-# an aliases for queries : KW1, KW2, POS_KW, NEG_KW
+# an aliases for queries : KW1, KW2, POS_KW, NEG_KW, KIND
+# where KIND defines the combination among {w/o, w/}²
 Query = tuple[list[Keyword], list[Keyword], list[Keyword], list[Keyword], tuple[bool, bool]]
 
 
@@ -201,7 +199,7 @@ async def fake_search(_, query: Query, *, delay=0):
     return results_nb, elapsed
 
 
-async def httpbin_search(session, query: Query, *, delay=0, error_rate=1):
+async def httpbin_search(session, query: Query, *, delay=0, error_rate=10):
     """Fake query tool WITH network on httpbin, for test purpose"""
     # simule 1% d'erreur
     if randint(1, 100) <= error_rate:
@@ -258,6 +256,11 @@ async def scopus_search(session, query: Query, *, delay=0):
     return results_nb, elapsed
 
 
+# query modes : one fake, one fake over network, one true
+SEARCH_MODES = {"scopus": scopus_search, "httpbin": httpbin_search, "fake": fake_search}
+DEFAULT_SEARCH_MODE = "fake"
+
+
 def generate_all_queries(data: pd.DataFrame, *, with_margin=False):
     """Generate all values to fill the contengency table"""
     # compounds = list(data.index.get_level_values(1))
@@ -293,39 +296,12 @@ def generate_all_queries(data: pd.DataFrame, *, with_margin=False):
         yield (compounds, activities, [], [], (None, None))
 
 
-async def create_all_job(queue, df, *, with_margin=False):
-    """Adds jobs (queries) into the job queue"""
-    # generate all queries
-    all_queries = list(generate_all_queries(df, with_margin=with_margin))
-
-    # put them into the queue with a job number
-    for query in all_queries:
-        await queue.put(query)
-        logger.debug("create_all_tasks() added query=%s", query[-3:])
-
-    return len(all_queries)
-
-
-# async def do_async(query: Query):
-#     """Launch aysync job"""
-#     # loop = asyncio.get_event_loop()
-#     # # async with aiohttp.ClientSession(raise_for_status=True) as session:
-#     # main_task = loop.create_task(asyncio.sleep(2), name="main-queue")
-#     # results = loop.run_until_complete(main_task)
-#     # return results
-
-#     # res = await asyncio.gather(scopus_search(query))
-#     # return res
-#     async with aiohttp.ClientSession(raise_for_status=True) as session:
-#         results = await asyncio.gather(httpbin_search(session, query, error_rate=50))
-#     return results
-
-
 async def execute_job(session, queue, results_df, task_factory, *, worker_delay=1, name=None):
-    """A (parallel) consumer that send a query to scopus and then add result to a dict"""
+    """A (parallel) consumer that send a query to scopus and then add result to a dataframe"""
     jobs_done = 0
+    jobs_retried = 0
     try:
-        while True:
+        while not queue.empty():
             query = await queue.get()
             nb_results, duration = await task_factory(session, query, delay=0)
 
@@ -366,27 +342,40 @@ async def execute_job(session, queue, results_df, task_factory, *, worker_delay=
             # add the same query again in the job queue to retry it
             if nb_results is None:
                 await queue.put(query)
+                jobs_retried += 1
                 logger.error("execute_job(id=%s) added back %s to the queue", name, query[-3:])
 
             await asyncio.sleep(max(worker_delay - duration, 0))
     except asyncio.CancelledError:
-        logger.debug("execute_job() task %s received cancel, done %i jobs", name, jobs_done)
-    return jobs_done
+        logger.debug("execute_job() task %s received cancel, done %i jobs, retried %i", name, jobs_done, jobs_retried)
+
+    return jobs_done, jobs_retried
 
 
-async def jobs_spawner(df: pd.DataFrame, *, task_factory, parallel_workers, worker_delay, with_margin):
+async def jobs_spawner(df: pd.DataFrame, *, task_factory, with_margin, parallel_workers, worker_delay, samples):
     """Create tasks in a queue which is emptied in parallele ensuring at most MAX_REQ_BY_SEC requests per second"""
     jobs_queue: asyncio.Queue = asyncio.Queue()
     # res_dict: defaultdict = defaultdict(dict)
     # task_factory.__name__
     logger.info("jobs_spawner(): task_factory=%s, parallel_workers=%i", task_factory.__name__, parallel_workers)
 
-    # ONE producer task to fill the queue
-    producer_task = asyncio.create_task(create_all_job(jobs_queue, df, with_margin=with_margin), name="producer")
+    # # ONE producer task to fill the queue
+    # producer_task = asyncio.create_task(create_all_job(jobs_queue, df, with_margin=with_margin), name="producer")
 
-    # on lance le producteur qui peuple la queue
-    [nb_queries] = await asyncio.gather(producer_task)
-    logger.info("jobs_spawner() producer added %i queries in the job queue", nb_queries)
+    # # on lance le producteur qui peuple la queue
+    # [nb_queries] = await asyncio.gather(producer_task)
+    # logger.info("jobs_spawner() producer added %i queries in the job queue", nb_queries)
+
+    # """Adds jobs (queries) into the job queue"""
+    # generate all queries put them into the queue
+    all_queries = list(generate_all_queries(df, with_margin=with_margin))
+    if samples is not None:
+        all_queries = sample(all_queries, samples)
+    for query in all_queries:
+        await jobs_queue.put(query)
+        logger.debug("jobs_spawner() added query=%s", query[-3:])
+
+    logger.debug("jobs_spawner() added %i queries", len(all_queries))
 
     # MAX_REQ_BY_SEC consummers that run in parallel and that can fire at most
     # one request per second
@@ -408,11 +397,12 @@ async def jobs_spawner(df: pd.DataFrame, *, task_factory, parallel_workers, work
         # on attend que tout soit traité, après que tout soit généré
         await jobs_queue.join()
         logger.debug("jobs_spawner() job queue is empty")
+        # OBSOLETE
         # stop all consumer stuck waiting job from the queue if any
-        for consumer in consumer_tasks:
-            consumer.cancel()
-            logger.debug("jobs_spawner() %s stopped", consumer.get_name())
-        jobs_done = await asyncio.gather(*consumer_tasks)
+        # for consumer in consumer_tasks:
+        #     consumer.cancel()
+        #     logger.debug("jobs_spawner() %s stopped", consumer.get_name())
+        jobs_done = await asyncio.gather(*consumer_tasks, return_exceptions=True)
         logger.info("jobs_spawner() nb of jobs done by each worker %s", jobs_done)
 
     # pending = asyncio.all_tasks()
@@ -421,12 +411,15 @@ async def jobs_spawner(df: pd.DataFrame, *, task_factory, parallel_workers, work
     return result_df
 
 
-DEFAULT_PARALLEL_WORKERS = 8
-DEFAULT_WORKER_DELAY = 1.0
-DEFAULT_SAMPLES = None
-
-
-def launcher(df: pd.DataFrame, *, task_factory=fake_search, with_margin=False):
+def launcher(
+    df: pd.DataFrame,
+    *,
+    task_factory=SEARCH_MODES[DEFAULT_SEARCH_MODE],
+    with_margin=False,
+    parallel_workers=DEFAULT_PARALLEL_WORKERS,
+    worker_delay=DEFAULT_WORKER_DELAY,
+    samples=None,
+):
     """Launch the batch of downloads"""
     # compounds = dataset.compounds.keys()
     # activities = dataset.activities.keys()
@@ -448,10 +441,11 @@ def launcher(df: pd.DataFrame, *, task_factory=fake_search, with_margin=False):
     main_task = loop.create_task(
         jobs_spawner(
             df,
-            parallel_workers=DEFAULT_PARALLEL_WORKERS,
+            parallel_workers=parallel_workers,
             task_factory=task_factory,
-            worker_delay=DEFAULT_WORKER_DELAY,
+            worker_delay=worker_delay,
             with_margin=with_margin,
+            samples=samples,
         ),
         name="jobs_spawner",
     )
@@ -475,8 +469,6 @@ def launcher(df: pd.DataFrame, *, task_factory=fake_search, with_margin=False):
 # %%
 if __name__ == "__main__":
     logger.setLevel(logging.INFO)
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    logger.info("__main__ output dir is '%s'", OUTPUT_DIR.absolute())
     logger.info("__main__ Scopus API key %s", API_KEY)
 
     dataset = load_data(TEST_DATA)
@@ -485,10 +477,9 @@ if __name__ == "__main__":
     logger.debug("__main__ all compounds %s", all_compounds)
     logger.debug("__main__ all activities %s", all_activities)
 
-
-    task_factory=partial(httpbin_search, error_rate=50)
+    # task_factory = partial(httpbin_search, error_rate=50)
     # task_factory.__name__ = httpbin_search.__name__
-    results = launcher(dataset, task_factory=httpbin_search)
+    results = launcher(dataset)
     print(results)
     print(results.info())
 

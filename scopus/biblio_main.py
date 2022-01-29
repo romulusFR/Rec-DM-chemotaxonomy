@@ -1,17 +1,19 @@
+"""CLI for the bibliographical extractor"""
+
 import argparse
 import logging
+from datetime import datetime
+from pathlib import Path
 from pprint import pformat
 
-import biblio_extractor as bl_ex
+import biblio_extractor as bex
 
 logging.basicConfig()
 logger = logging.getLogger("CHEMOTAXO")
 
-# DEFAULT VALUES
-DEFAULT_WORKERS = 8
-DEFAULT_DELAY_PER_WORKER = 1.0
-DEFAULT_SAMPLES = None
-DEFAULT_MODE = "fake"
+# Output
+OUTPUT_DIR = Path("results")
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def get_parser():
@@ -29,42 +31,49 @@ def get_parser():
         help="verbosity level, default is WARNING (30). Use -v once for INFO (20) and twice -vv for DEBUG (10).",
     )
     arg_parser.add_argument(
-        "--mode",
-        "-m",
+        "--search",
+        "-sm",
         action="store",
-        default=DEFAULT_MODE,
-        help=f"download mode: 'fake', 'httpbin' or 'scopus' (default '{DEFAULT_MODE}')",
+        default=bex.DEFAULT_SEARCH_MODE,
+        help=f"search mode: 'fake', 'httpbin' or 'scopus' (default '{bex.DEFAULT_SEARCH_MODE}')",
     )
     arg_parser.add_argument(
         "--parallel",
         "-p",
         type=int,
         action="store",
-        default=DEFAULT_WORKERS,
-        help=f"number of parallel consumers/workers (default {DEFAULT_WORKERS})",
+        default=bex.DEFAULT_PARALLEL_WORKERS,
+        help=f"number of parallel consumers/workers (default {bex.DEFAULT_PARALLEL_WORKERS})",
     )
     arg_parser.add_argument(
         "--delay",
         "-d",
         type=float,
         action="store",
-        default=DEFAULT_DELAY_PER_WORKER,
-        help=f"delay between consecutive queries from a worker (default {DEFAULT_DELAY_PER_WORKER})",
+        default=bex.DEFAULT_WORKER_DELAY,
+        help=f"minimum delay between two consecutive queries from a worker (default {bex.DEFAULT_WORKER_DELAY})",
     )
     arg_parser.add_argument(
         "--samples",
         "-s",
         type=int,
         action="store",
-        default=DEFAULT_SAMPLES,
-        help="maximum number of queries (random samples) (default all pairs)",
+        default=bex.DEFAULT_SAMPLES,
+        help="maximum number of queries (random samples) (default all queries)",
     )
     arg_parser.add_argument(
-        "--no-write",
+        "--write",
         "-w",
         action="store_true",
         default=False,
-        help="do not write results to csv file (default False)",
+        help="writes results to csv file (default False)",
+    )
+    arg_parser.add_argument(
+        "--margins",
+        "-m",
+        action="store_true",
+        default=False,
+        help="also queries and returns marginal sums",
     )
     return arg_parser
 
@@ -85,15 +94,46 @@ if __name__ == "__main__":
     print(f"Scopus downloader started (debug={logger.getEffectiveLevel()})")
     logger.debug(pformat(vars(args)))
 
-    dataset = bl_ex.load_data(args.filename)
-    print(dataset.to_string())
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    logger.info("output dir is '%s'", OUTPUT_DIR.absolute())
+    logger.info("Scopus API key %s", bex.API_KEY)
+
+    input = Path(args.filename)
+    dataset = bex.load_data(input)
+    all_compounds = list(dataset.index.get_level_values(1))
+    all_activities = list(dataset.columns.get_level_values(1))
+    print(f"Loaded {len(all_compounds)} compounds and {len(all_activities)} activities")
+    logger.info("all compounds %s", all_compounds)
+    logger.info("all activities %s", all_activities)
+
     # dataset = load_chemo_activities(args.filename)
-    # download_all(
-    #     dataset,
-    #     mode=args.mode,
-    #     parallel=args.parallel,
-    #     samples=args.samples,
-    #     no_write=args.no_write,
-    #     delay=args.delay,
-    # )
-    # pass
+
+    if args.search not in bex.SEARCH_MODES:
+        raise ValueError(f"Unknown search mode {args.search}")
+
+    nb_queries = (
+        args.samples
+        if args.samples is not None
+        else 4 * len(all_compounds) * len(all_activities)
+        + (2 * len(all_compounds) + 2 * len(all_activities) + 1) * args.margins
+    )
+    print(
+        f"Launching {nb_queries} queries using {args.search} with {args.parallel} parallel workers (w/ min delay {args.delay})"
+    )
+
+    results = bex.launcher(
+        dataset,
+        task_factory=bex.SEARCH_MODES[args.search],
+        with_margin=args.margins,
+        parallel_workers=args.parallel,
+        worker_delay=args.delay,
+        samples=args.samples,
+    )
+
+    print(results)
+
+    if args.write:
+        now = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        output_filename = OUTPUT_DIR / f"{input.stem}_{now}.csv"
+        results.to_csv(output_filename)
+        logger.info("results written to %s", output_filename)
