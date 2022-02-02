@@ -16,7 +16,7 @@ OUTPUT_DIR = Path("results")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def get_parser():
+def get_parser() -> argparse.ArgumentParser:
     """argparse configuration"""
     arg_parser = argparse.ArgumentParser(description="Scopus downloader")
     arg_parser.add_argument(
@@ -98,8 +98,8 @@ if __name__ == "__main__":
     logger.info("output dir is '%s'", OUTPUT_DIR.absolute())
     logger.info("Scopus API key %s", bex.API_KEY)
 
-    input = Path(args.filename)
-    dataset = bex.load_data(input)
+    filename = Path(args.filename)
+    dataset = bex.load_data(filename)
     all_compounds = list(dataset.index.get_level_values(1))
     all_activities = list(dataset.columns.get_level_values(1))
     print(f"Loaded {len(all_compounds)} compounds and {len(all_activities)} activities")
@@ -134,6 +134,6 @@ if __name__ == "__main__":
 
     if args.write:
         now = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        output_filename = OUTPUT_DIR / f"{input.stem}_{now}.csv"
+        output_filename = OUTPUT_DIR / f"{filename.stem}_{now}.csv"
         results.to_csv(output_filename)
         logger.info("results written to %s", output_filename)

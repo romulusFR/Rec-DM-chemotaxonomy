@@ -345,7 +345,7 @@ async def consumer(
     task_factory: SearchAPI,
     *,
     worker_delay: float = 1.0,
-    name: Optional[str] = None,
+    consumer_id: Optional[Any] = None,
 ):
     """A (parallel) consumer that send a query to scopus and then add result to a dataframe"""
     jobs_done = 0
@@ -356,7 +356,7 @@ async def consumer(
             query = await queue.get()
             nb_results, duration = await task_factory(session, query, delay=0.0)
 
-            logger.info("consumer(id=%s) got %s from job %s after %f", name, nb_results, query.short(), duration)
+            logger.info("consumer(%s) got %s from job %s after %f", consumer_id, nb_results, query.short(), duration)
             pos_kws = query.pos_kws
             neg_kws = query.neg_kws
             kind = query.kind
@@ -383,8 +383,8 @@ async def consumer(
             else:
                 # raise ValueError(f"{len(pos_kw) = }, {len(neg_kw) = } for {kind = } should not arise")
                 logger.error(
-                    "consumer(id=%s): len(pos_kw) = %i, len(neg_kw) = %i should not arise for kind = %s",
-                    name,
+                    "consumer(%s): len(pos_kw) = %i, len(neg_kw) = %i should not arise for kind = %s",
+                    consumer_id,
                     len(pos_kws),
                     len(neg_kws),
                     kind,
@@ -396,13 +396,13 @@ async def consumer(
             if nb_results is None:
                 await queue.put(query)
                 jobs_retried += 1
-                logger.error("consumer(id=%s) added back %s to the queue", name, query.short())
+                logger.error("consumer(%s) added back %s to the queue", consumer_id, query.short())
 
             await asyncio.sleep(max(worker_delay - duration, 0))
     except asyncio.CancelledError:
-        logger.debug("consumer() task %s received cancel, done %i jobs, retried %i", name, jobs_done, jobs_retried)
+        logger.debug("consumer(%s) received cancel, done %i jobs, retried %i", consumer_id, jobs_done, jobs_retried)
 
-    logger.debug("consumer() task %s received cancel, done %i jobs, retried %i", name, jobs_done, jobs_retried)
+    logger.debug("consumer(%s) received cancel, done %i jobs, retried %i", consumer_id, jobs_done, jobs_retried)
 
     return jobs_done, jobs_retried
 
@@ -450,13 +450,13 @@ async def spawner(
         # on lance tous les exécuteurs de requêtes
         consumer_tasks = [
             asyncio.create_task(
-                consumer(session, jobs_queue, result_df, task_factory, worker_delay=worker_delay, name=str(i)),
-                name=f"consumer-{i}",
+                consumer(session, jobs_queue, result_df, task_factory, worker_delay=worker_delay, consumer_id=f"{i}"),
+                name=f"task-{i}",
             )
             for i in range(1, parallel_workers + 1)
         ]
 
-        logger.info("spawner() %i consumer tasks created", len(consumer_tasks))
+        logger.info("spawner() %i tasks created", len(consumer_tasks))
 
         # on attend que tout soit traité, après que tout soit généré
         await jobs_queue.join()
@@ -483,8 +483,7 @@ def launcher(
 ):
     """Launch the batch of downloads: a simple (non async) wrapper around tasks_spawner"""
     launch_start_time = time.perf_counter()
-    logger.info("launcher() starting asynchronous jobs")
-    logger.info("launcher() launching all jobs (producer and consumers)")
+    logger.info("launcher() launching all async tasks")
     results_df = asyncio.run(
         spawner(
             df,
