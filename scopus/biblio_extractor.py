@@ -1,14 +1,16 @@
-# pylint: disable=unused-import,anomalous-backslash-in-string
+# pylint: disable=unused-import
+# pylint: disable=anomalous-backslash-in-string
 # pylint: disable=line-too-long
 """Generate queries and summarizes number of articles from bibliographical DB (e.g., Scopus)
 
-The general idea is to have TWO disjoint finite sets of keywords such as :
+The general idea is to have TWO (disjoint) finite sets of keywordss, for example:
 
-- (chemical) coumpounds = KW1 = {acridine, triterpene, ...}
-- (biological, pharmacological) activities = KW2 = {germination, cytotoxicity, ...}
+- KW1 = a set of (chemical) coumpounds = {acridine, triterpene, ...}
+- KW2 = a set of (biological, pharmacological) activities = {germination, cytotoxicity, ...}
 
-Then to query an online bibligraphical service such as <https://api.elsevier.com/content/search/scopus> to find out how many papers have these keywords.
-Each paper may have many keywords from the two sets, possibly none (open world hypothesis).
+The program queries an online bibligraphical service such as <https://api.elsevier.com/content/search/scopus>
+to find out how many papers have these keywords.
+Note that, each paper may have many keywords from the two sets, possibly none (open world hypothesis).
 
 We want to analyse the dependencies between the two sets keywords using techniques like <https://en.wikipedia.org/wiki/Correspondence_analysis>
 To do so, this program creates and fill specific kind of contingency table such as follows :
@@ -20,19 +22,20 @@ acridine    w/  X_11        Y_11        X_12            Y_12
 triterpene  w/o U_21        V_21        U_22            V_22
 triterpene  w/  X_21        Y_21        X_22            Y_22
 
-Where for each couple (kw_i, kw_j) in KW1xKW2, the submatrix [U,V][X,Y] gives :
+Where for each couple (kw_i, kw_j) in KW1xKW2, the submatrix [U,V][X,Y] is a kind of confusion matrix where:
 
-- U = (False, False) : the number of papers that have NEITHER kw1 NOR kw2 as keywords
-- V = (False, True)  : the number of papers that have kw2 but NOT kw1 as keywords
-- X = (True, False)  : the number of papers that have kw1 but NOT kw2 as keywords
-- Y = (True, True)   :the number of papers that have BOTH kw1 AND kw2 as keywords
+- U = (False, False) is the number of papers that have NEITHER kw1 NOR kw2 as keywords
+- V = (False, True)  is the number of papers that have kw2 but NOT kw1 as keywords
+- X = (True, False)  is the number of papers that have kw1 but NOT kw2 as keywords
+- Y = (True, True)   is the number of papers that have BOTH kw1 AND kw2 as keywords
 
 
-We restrict the analysis to the domain D, which is the set of paper that have at least one keyword in KW1 and at least one in KW2.
+We avoid the open world hypothesis by restricting the analysis to the paper in the domain D,
+which is the set of paper that have at least one keyword in KW1 and at least one in KW2.
 By construction:
 - U + V and X + Y are constants for each kw1 (whatever the choice of kw2)
 - U + X and V + Y are constants for each kw2 (whatever the choice of kw1)
-Moreover each submatrix [U,V][X,Y] is such that U + V + X + Y  = |D|.
+Moreover each confusion matrix [U,V][X,Y] is such that U + V + X + Y  = |D|.
 
 """
 # pylint: enable=line-too-long
@@ -69,7 +72,6 @@ API_KEY = {"X-ELS-APIKey": environ.get("API_KEY", "no-elsevier-api-key-defined")
 X_RATE_HEADERS = ["X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"]
 SSL_CONTEXT = ssl.create_default_context(cafile=certifi.where())
 
-
 # Input samples
 INPUT_DATA = Path("data/activities.csv")
 SAMPLE_DATA = Path("data/samples.csv")
@@ -82,24 +84,25 @@ SELECTORS = ["w/o", "w/"]  # ordered as bools
 MARGIN_SYMB = "Σ"
 CLASS_SYMB = "*"
 
-
 # Default parameters
 DEFAULT_PARALLEL_WORKERS = 8  # number of parallel jobs
 DEFAULT_WORKER_DELAY = 1.0  # at most one req / sec
 DEFAULT_SAMPLES = None  # no sampling
 
+# Typing
 # a keyword is a fully index row or column identifier
 Keyword = tuple[str, str]
 # an aliases for queries : KW1, KW2, POS_KW, NEG_KW, KIND
-# where KIND defines the combination among {w/o, w/}²
+# where KIND defines the combination among {w/o, w/}x{w/o, w/}
+# that is, a celle of the confusion matrix
 Query = tuple[list[Keyword], list[Keyword], list[Keyword], list[Keyword], tuple[bool, bool]]
 
 
-def load_data(file: str | Path):
+def load_data(filename: str | Path):
     """loads a CSV dataset as a dataframe"""
     # https://pandas.pydata.org/docs/reference/api/pandas.read_csv.html
-    df: pd.DataFrame = pd.read_csv(file, index_col=[0, 1], header=[0, 1]).fillna(0)
-    logger.debug("dataset %s read", file)
+    df: pd.DataFrame = pd.read_csv(filename, index_col=[0, 1], header=[0, 1]).fillna(0)
+    logger.debug("dataset %s read", filename)
 
     def normalize_names(expr: str):
         """convenience tool"""
@@ -355,18 +358,8 @@ async def execute_job(session, queue, results_df, task_factory, *, worker_delay=
 async def jobs_spawner(df: pd.DataFrame, *, task_factory, with_margin, parallel_workers, worker_delay, samples):
     """Create tasks in a queue which is emptied in parallele ensuring at most MAX_REQ_BY_SEC requests per second"""
     jobs_queue: asyncio.Queue = asyncio.Queue()
-    # res_dict: defaultdict = defaultdict(dict)
-    # task_factory.__name__
     logger.info("jobs_spawner(): task_factory=%s, parallel_workers=%i", task_factory.__name__, parallel_workers)
 
-    # # ONE producer task to fill the queue
-    # producer_task = asyncio.create_task(create_all_job(jobs_queue, df, with_margin=with_margin), name="producer")
-
-    # # on lance le producteur qui peuple la queue
-    # [nb_queries] = await asyncio.gather(producer_task)
-    # logger.info("jobs_spawner() producer added %i queries in the job queue", nb_queries)
-
-    # """Adds jobs (queries) into the job queue"""
     # generate all queries put them into the queue
     all_queries = list(generate_all_queries(df, with_margin=with_margin))
     if samples is not None:
@@ -405,9 +398,6 @@ async def jobs_spawner(df: pd.DataFrame, *, task_factory, with_margin, parallel_
         jobs_done = await asyncio.gather(*consumer_tasks, return_exceptions=True)
         logger.info("jobs_spawner() nb of jobs done by each worker %s", jobs_done)
 
-    # pending = asyncio.all_tasks()
-    # logger.debug(pending)
-
     return result_df
 
 
@@ -420,25 +410,11 @@ def launcher(
     worker_delay=DEFAULT_WORKER_DELAY,
     samples=None,
 ):
-    """Launch the batch of downloads"""
-    # compounds = dataset.compounds.keys()
-    # activities = dataset.activities.keys()
-    # queries = list(product(compounds, activities))
-
-    # if samples is not None:
-    # queries = sample(queries, samples)  # [(c,) for c in compounds]
-
-    # logger.info("%i compounds X %i pharmacology = %i", len(compounds), len(activities), len(queries))
-
+    """Launch the batch of downloads: a simple wrapper around jobs_spawner"""
     launch_start_time = time.perf_counter()
     logger.info("launcher() starting asynchronous jobs")
-    # task_factory = SEARCH_MODES.get("scopus", SEARCH_MODES[DEFAULT_SEARCH_MODE])
-
-    # correction bug scopus
-    # results = asyncio.run(main_queue(queries, mode=mode))
-    # TODO : supprimer loop
-    loop = asyncio.get_event_loop()
-    main_task = loop.create_task(
+    logger.info("launcher() launching all jobs (producer and consumers)")
+    results_df = asyncio.run(
         jobs_spawner(
             df,
             parallel_workers=parallel_workers,
@@ -446,22 +422,11 @@ def launcher(
             worker_delay=worker_delay,
             with_margin=with_margin,
             samples=samples,
-        ),
-        name="jobs_spawner",
+        )
     )
-    logger.info("launcher() launching all jobs (producer and consumers)")
-    results_df = loop.run_until_complete(main_task)
-
-    # dataset.data = results
 
     total_time = time.perf_counter() - launch_start_time
     logger.info("launcher() all jobs done in %fs", total_time)
-
-    # if not no_write:
-    #     now = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    #     output_filename = OUTPUT_DIR / f"activities_{now}.csv"
-    #     write_chemo_activities(output_filename, dataset)
-    #     logger.info("WRITTEN %s", output_filename)
 
     return results_df.astype("Int64")
 
