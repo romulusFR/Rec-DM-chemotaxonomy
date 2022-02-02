@@ -43,6 +43,7 @@ Moreover each confusion matrix [U,V][X,Y] is such that U + V + X + Y  = |D|.
 # %%
 
 import asyncio
+from dataclasses import dataclass
 import logging
 import ssl
 import time
@@ -52,8 +53,9 @@ from itertools import product
 from os import environ
 from pathlib import Path
 from random import randint, sample
+from typing import Callable, Iterator, Optional, Any, Awaitable, Protocol
 
-import aiohttp
+from aiohttp import ClientSession, ClientResponseError
 import certifi
 import pandas as pd
 from dotenv import load_dotenv
@@ -92,20 +94,46 @@ DEFAULT_SAMPLES = None  # no sampling
 # Typing
 # a keyword is a fully index row (or column) identifier made of a class and the keyword itself
 Keyword = tuple[str, str]
-# an aliases for queries : KW1, KW2, POS_KW, NEG_KW, KIND
-# where KIND defines the combination among {w/o, w/}x{w/o, w/}
-# that is, a celle of the confusion matrix
-Query = tuple[list[Keyword], list[Keyword], list[Keyword], list[Keyword], tuple[bool, bool]]
+
+# TODO : voir si besoin https://stackoverflow.com/questions/54785148/destructuring-dicts-and-objects-in-python
+@dataclass(frozen=True)
+class Query:
+    """an aliases for queries : KW1, KW2, POS_KW, NEG_KW, KIND
+    where KIND defines the combination among {w/o, w/}x{w/o, w/}
+    that is, a celle of the confusion matrix"""
+
+    kws_1: list[Keyword]
+    kws_2: list[Keyword]
+    pos_kws: list[Keyword]
+    neg_kws: list[Keyword]
+    kind: tuple[Optional[bool], Optional[bool]]
+
+    def short(self) -> str:
+        """shor representation of queries with first two fields omitted"""
+        return f"+{self.pos_kws}, -{self.neg_kws}, k={self.kind}"
+
+
+# type of searches
+ResultAPI = tuple[Optional[int], float]
+# SearchAPI = Callable[[ClientSession, Query, Optional[Any]], Awaitable[ResultAPI]]
+class SearchAPI(Protocol):  # pylint: disable=too-few-public-methods
+    """A class to describe callbacks to a web API"""
+
+    __name__: str
+
+    async def __call__(self, session: ClientSession, query: Query, delay: Optional[Any]) -> ResultAPI:
+        pass
+
 
 # TODO normalize alternatives as well in keywords
-def load_data(filename: str | Path):
+def load_data(filename: str | Path) -> pd.DataFrame:
     """loads a CSV dataset as a dataframe with two levels keywords"""
     # https://pandas.pydata.org/docs/reference/api/pandas.read_csv.html
     # row/col dimension 0 is the class, row/col dimension 1 is the keyword
     df: pd.DataFrame = pd.read_csv(filename, index_col=[0, 1], header=[0, 1]).fillna(0)
     logger.debug("load_data(%s): input dataset read", filename)
 
-    def normalize_names(expr: str):
+    def normalize_names(expr: str) -> str:
         """convenience tool for normalizing strings"""
         return ALT_SEP.join(string.strip().lower() for string in expr.split(ALT_SEP))
 
@@ -168,23 +196,24 @@ def build_clause(query: Query) -> str:
     len(pos_kw) = x and len(neg_kw) = y.
 
     Classe information are discarded from keywords.
-    Keywords that contain alternatives are normalized to conjunctions when in a positive position or to disjunctions when in the negative position.
+    Keywords that contain alternatives are normalized to conjunctions when
+    in a positive position or to disjunctions when in the negative position.
 
     See tests for more information.
     """
 
-    def split_alts(string, operator="OR"):
+    def split_alts(string: str, operator: str = "OR") -> str:
         """transform alternatives in keywords"""
-        base = f" {operator} ".join(f'KEY("{name}")' for name in string.split(ALT_SEP))
+        base = f" {operator.strip()} ".join(f'KEY("{name}")' for name in string.split(ALT_SEP))
         return f"({base})"
 
-    compounds, activities, pos_kw, neg_kw, _ = query
+    # compounds, activities, pos_kw, neg_kw, _ = query
 
     # we only keep the last item [-1] of keywords, i.e., we discard their classes in queries
-    all_compounds_clause = " OR ".join(split_alts(compound[-1]) for compound in compounds)
-    all_ativities_clause = " OR ".join(split_alts(activity[-1]) for activity in activities)
-    positive_clause = " AND ".join(split_alts(kw[-1]) for kw in pos_kw)
-    negative_clause = " OR ".join(split_alts(kw[-1]) for kw in neg_kw)
+    all_compounds_clause = " OR ".join(split_alts(compound[-1]) for compound in query.kws_1)
+    all_ativities_clause = " OR ".join(split_alts(activity[-1]) for activity in query.kws_2)
+    positive_clause = " AND ".join(split_alts(kw[-1]) for kw in query.pos_kws)
+    negative_clause = " OR ".join(split_alts(kw[-1]) for kw in query.neg_kws)
 
     clauses = " AND ".join(
         f"({clause})" for clause in [all_compounds_clause, all_ativities_clause, positive_clause] if clause
@@ -202,12 +231,12 @@ def build_clause(query: Query) -> str:
 # %%
 
 
-async def fake_search(_, query: Query, *, delay=0):
+async def fake_search(_, query: Query, *, delay: float = 0.0) -> ResultAPI:
     """Fake query tool WITHOUT network, for test purpose"""
     await asyncio.sleep(delay)
     start_time = time.perf_counter()
     clause = build_clause(query)
-    logger.debug("fake_search(%s)", query[-3:])
+    logger.debug("fake_search(%s)", query.short())
     logger.debug("               %s", clause)
     results_nb = randint(1, 10000)
     await asyncio.sleep(randint(1, 1000) / 1000)
@@ -215,7 +244,7 @@ async def fake_search(_, query: Query, *, delay=0):
     return results_nb, elapsed
 
 
-async def httpbin_search(session, query: Query, *, delay=0, error_rate=10):
+async def httpbin_search(session, query: Query, *, delay: float = 0.0, error_rate: int = 10) -> ResultAPI:
     """Fake query tool WITH network on httpbin, for test purpose. Simulates error rate (with http 429)"""
     if randint(1, 100) <= error_rate:
         url = "http://httpbin.org/status/429"
@@ -225,18 +254,18 @@ async def httpbin_search(session, query: Query, *, delay=0, error_rate=10):
     results_nb = None
     await asyncio.sleep(delay)
     start_time = time.perf_counter()
-    logger.debug("httpbin_search(%s)", query[-3:])
+    logger.debug("httpbin_search(%s)", query.short())
     json_query = wrap_scopus(build_clause(query))
 
     try:
         async with session.get(url, params=json_query, data=data, ssl=SSL_CONTEXT) as resp:
             json = await resp.json()
             results_nb = int(json["form"]["answer"])
-    except aiohttp.ClientResponseError as err:
-        logger.warning("aiohttp.ClientResponseError #%i: %s", err.status, err.message)
+    except ClientResponseError as err:
+        logger.warning("scopus_search(): ClientResponseError #%i: %s", err.status, err.message)
     finally:
         elapsed = time.perf_counter() - start_time
-    logger.debug("httpbin_search(%s)=%i in %f sec", query[-3:], results_nb, elapsed)
+    logger.debug("httpbin_search(%s)=%i in %f sec", query.short(), results_nb, elapsed)
     return results_nb, elapsed
 
 
@@ -254,18 +283,18 @@ async def scopus_search(session, query: Query, *, delay=0):
 
     await asyncio.sleep(delay)
     start_time = time.perf_counter()
-    logger.debug("scopus_search(%s)", query[-3:])
+    logger.debug("scopus_search(%s)", query.short())
     json_query = wrap_scopus(build_clause(query))
     try:
         async with session.get(scopus_url, params=json_query, headers=API_KEY, ssl=SSL_CONTEXT) as resp:
             logger.debug("X-RateLimit-Remaining=%s", resp.headers.get("X-RateLimit-Remaining", None))
             json = await resp.json()
             results_nb = int(json["search-results"]["opensearch:totalResults"], 10)
-    except aiohttp.ClientResponseError as err:
-        logger.warning("aiohttp.ClientResponseError #%i: %s", err.status, err.message)
+    except ClientResponseError as err:
+        logger.warning("scopus_search(): ClientResponseError #%i: %s", err.status, err.message)
     finally:
         elapsed = time.perf_counter() - start_time
-    logger.debug("scopus_search(%s)=%s in %f sec", query[-3:], results_nb, elapsed)
+    logger.debug("scopus_search(%s)=%s in %f sec", query.short(), results_nb, elapsed)
     return results_nb, elapsed
 
 
@@ -274,7 +303,7 @@ SEARCH_MODES = {"scopus": scopus_search, "httpbin": httpbin_search, "fake": fake
 DEFAULT_SEARCH_MODE = "fake"
 
 
-def generate_all_queries(data: pd.DataFrame, *, with_margin=False):
+def generate_all_queries(data: pd.DataFrame, *, with_margin: bool = False) -> Iterator[Query]:
     """Generate all queries from a dataset."""
     # compounds = list(data.index.get_level_values(1))
     # activities = list(data.columns.get_level_values(1))
@@ -286,30 +315,38 @@ def generate_all_queries(data: pd.DataFrame, *, with_margin=False):
     for compound in compounds:
         for activity in activities:
             # both the compound and the activity
-            yield ([], [], [compound, activity], [], (True, True))
+            yield Query([], [], [compound, activity], [], (True, True))
             # the activity but not this compound (but at least one another in the domain)
-            yield (compounds, [], [activity], [compound], (False, True))
+            yield Query(compounds, [], [activity], [compound], (False, True))
             # the compound but not this activity (but at least one another in the domain)
-            yield ([], activities, [compound], [activity], (True, False))
+            yield Query([], activities, [compound], [activity], (True, False))
             # neither the compound nor the activity (but stil in the domain)
-            yield (compounds, activities, [], [compound, activity], (False, False))
+            yield Query(compounds, activities, [], [compound, activity], (False, False))
 
     # adds extra rows/columns for marginal sums (an extra row and an extra column for total)
     # this should add 4 x (|KW1| + |KW2| + 1) but we exclude 2 + 2 + 3 degenerated combinations which always are 0
     if with_margin:
         # rows margin sums, -2 always 0
         for compound in compounds:
-            yield ([], activities, [compound], [], (True, None))
-            yield (compounds, activities, [], [compound], (False, None))
+            yield Query([], activities, [compound], [], (True, None))
+            yield Query(compounds, activities, [], [compound], (False, None))
         # cols margin sums, -2 always 0
         for activity in activities:
-            yield (compounds, [], [activity], [], (None, True))
-            yield (compounds, activities, [], [activity], (None, False))
+            yield Query(compounds, [], [activity], [], (None, True))
+            yield Query(compounds, activities, [], [activity], (None, False))
         # total margin sum, -3 always 0
-        yield (compounds, activities, [], [], (None, None))
+        yield Query(compounds, activities, [], [], (None, None))
 
 
-async def consume_query(session, queue, results_df, task_factory, *, worker_delay=1, name=None):
+async def consumer(
+    session: ClientSession,
+    queue: asyncio.Queue,
+    results_df: pd.DataFrame,
+    task_factory: SearchAPI,
+    *,
+    worker_delay: float = 1.0,
+    name: Optional[str] = None,
+):
     """A (parallel) consumer that send a query to scopus and then add result to a dataframe"""
     jobs_done = 0
     jobs_retried = 0
@@ -317,26 +354,28 @@ async def consume_query(session, queue, results_df, task_factory, *, worker_dela
         # queue must be filled first
         while not queue.empty():
             query = await queue.get()
-            nb_results, duration = await task_factory(session, query, delay=0)
+            nb_results, duration = await task_factory(session, query, delay=0.0)
 
-            logger.info("execute_job(id=%s) got %s from job %s after %f", name, nb_results, query[-3:], duration)
-            pos_kw, neg_kw, kind = query[-3:]
+            logger.info("consumer(id=%s) got %s from job %s after %f", name, nb_results, query.short(), duration)
+            pos_kws = query.pos_kws
+            neg_kws = query.neg_kws
+            kind = query.kind
             if kind == (True, True):
-                results_df.loc[(*pos_kw[0], SELECTORS[True]), (*pos_kw[1], SELECTORS[True])] = nb_results
+                results_df.loc[(*pos_kws[0], SELECTORS[True]), (*pos_kws[1], SELECTORS[True])] = nb_results
             elif kind == (True, False):
-                results_df.loc[(*pos_kw[0], SELECTORS[True]), (*neg_kw[0], SELECTORS[False])] = nb_results
+                results_df.loc[(*pos_kws[0], SELECTORS[True]), (*neg_kws[0], SELECTORS[False])] = nb_results
             elif kind == (False, True):
-                results_df.loc[(*neg_kw[0], SELECTORS[False]), (*pos_kw[0], SELECTORS[True])] = nb_results
+                results_df.loc[(*neg_kws[0], SELECTORS[False]), (*pos_kws[0], SELECTORS[True])] = nb_results
             elif kind == (False, False):
-                results_df.loc[(*neg_kw[0], SELECTORS[False]), (*neg_kw[1], SELECTORS[False])] = nb_results
+                results_df.loc[(*neg_kws[0], SELECTORS[False]), (*neg_kws[1], SELECTORS[False])] = nb_results
             elif kind == (True, None):
-                results_df.loc[(*pos_kw[0], SELECTORS[True]), (CLASS_SYMB, MARGIN_SYMB, SELECTORS[True])] = nb_results
+                results_df.loc[(*pos_kws[0], SELECTORS[True]), (CLASS_SYMB, MARGIN_SYMB, SELECTORS[True])] = nb_results
             elif kind == (False, None):
-                results_df.loc[(*neg_kw[0], SELECTORS[False]), (CLASS_SYMB, MARGIN_SYMB, SELECTORS[True])] = nb_results
+                results_df.loc[(*neg_kws[0], SELECTORS[False]), (CLASS_SYMB, MARGIN_SYMB, SELECTORS[True])] = nb_results
             elif kind == (None, True):
-                results_df.loc[(CLASS_SYMB, MARGIN_SYMB, SELECTORS[True]), (*pos_kw[0], SELECTORS[True])] = nb_results
+                results_df.loc[(CLASS_SYMB, MARGIN_SYMB, SELECTORS[True]), (*pos_kws[0], SELECTORS[True])] = nb_results
             elif kind == (None, False):
-                results_df.loc[(CLASS_SYMB, MARGIN_SYMB, SELECTORS[True]), (*neg_kw[0], SELECTORS[False])] = nb_results
+                results_df.loc[(CLASS_SYMB, MARGIN_SYMB, SELECTORS[True]), (*neg_kws[0], SELECTORS[False])] = nb_results
             elif kind == (None, None):
                 results_df.loc[
                     (CLASS_SYMB, MARGIN_SYMB, SELECTORS[True]), (CLASS_SYMB, MARGIN_SYMB, SELECTORS[True])
@@ -344,10 +383,10 @@ async def consume_query(session, queue, results_df, task_factory, *, worker_dela
             else:
                 # raise ValueError(f"{len(pos_kw) = }, {len(neg_kw) = } for {kind = } should not arise")
                 logger.error(
-                    "execute_job(id=%s): len(pos_kw) = %i, len(neg_kw) = %i should not arise for kind = %s",
+                    "consumer(id=%s): len(pos_kw) = %i, len(neg_kw) = %i should not arise for kind = %s",
                     name,
-                    len(pos_kw),
-                    len(neg_kw),
+                    len(pos_kws),
+                    len(neg_kws),
                     kind,
                 )
             queue.task_done()
@@ -357,21 +396,42 @@ async def consume_query(session, queue, results_df, task_factory, *, worker_dela
             if nb_results is None:
                 await queue.put(query)
                 jobs_retried += 1
-                logger.error("execute_job(id=%s) added back %s to the queue", name, query[-3:])
+                logger.error("consumer(id=%s) added back %s to the queue", name, query.short())
 
             await asyncio.sleep(max(worker_delay - duration, 0))
     except asyncio.CancelledError:
-        logger.debug("execute_job() task %s received cancel, done %i jobs, retried %i", name, jobs_done, jobs_retried)
+        logger.debug("consumer() task %s received cancel, done %i jobs, retried %i", name, jobs_done, jobs_retried)
 
-    logger.debug("execute_job() task %s received cancel, done %i jobs, retried %i", name, jobs_done, jobs_retried)
+    logger.debug("consumer() task %s received cancel, done %i jobs, retried %i", name, jobs_done, jobs_retried)
 
     return jobs_done, jobs_retried
 
 
-async def tasks_spawner(df: pd.DataFrame, *, task_factory, with_margin, parallel_workers, worker_delay, samples):
+async def observer(queue: asyncio.Queue, frequence: float = 1.0):
+    """Observer task that reports the current state of the queue"""
+    delay = 1 / frequence
+    observations = 0
+    try:
+        while True:
+            print(f"{queue.qsize()} jobs in the queue")
+            observations += 1
+            await asyncio.sleep(delay)
+    except asyncio.CancelledError:
+        logger.debug("observer() made %i observations", observations)
+
+
+async def spawner(
+    df: pd.DataFrame,
+    *,
+    task_factory: SearchAPI,
+    with_margin: bool,
+    parallel_workers: int,
+    worker_delay: float,
+    samples: Optional[int],
+):
     """Create tasks in a queue which is emptied in parallele ensuring at most MAX_REQ_BY_SEC requests per second"""
     jobs_queue: asyncio.Queue = asyncio.Queue()
-    logger.info("tasks_spawner(): task_factory=%s, parallel_workers=%i", task_factory.__name__, parallel_workers)
+    logger.info("spawner(): task_factory=%s, parallel_workers=%i", task_factory.__name__, parallel_workers)
 
     # generate all queries put them into the queue
     all_queries = list(generate_all_queries(df, with_margin=with_margin))
@@ -379,35 +439,35 @@ async def tasks_spawner(df: pd.DataFrame, *, task_factory, with_margin, parallel
         all_queries = sample(all_queries, samples)
     for query in all_queries:
         await jobs_queue.put(query)
-        logger.debug("tasks_spawner() added query=%s", query[-3:])
+        logger.debug("spawner() added query=%s", query.short())
 
-    logger.info("tasks_spawner() added %i queries to the queue", len(all_queries))
+    logger.info("spawner() added %i queries to the queue", len(all_queries))
 
     consumer_tasks = []
     result_df = extend_df(df)
-    async with aiohttp.ClientSession(raise_for_status=True) as session:
+    async with ClientSession(raise_for_status=True) as session:
 
         # on lance tous les exécuteurs de requêtes
         consumer_tasks = [
             asyncio.create_task(
-                consume_query(session, jobs_queue, result_df, task_factory, worker_delay=worker_delay, name=i),
+                consumer(session, jobs_queue, result_df, task_factory, worker_delay=worker_delay, name=str(i)),
                 name=f"consumer-{i}",
             )
             for i in range(1, parallel_workers + 1)
         ]
 
-        logger.info("tasks_spawner() %i consumer tasks created", len(consumer_tasks))
+        logger.info("spawner() %i consumer tasks created", len(consumer_tasks))
 
         # on attend que tout soit traité, après que tout soit généré
         await jobs_queue.join()
-        logger.debug("tasks_spawner() job queue is empty")
+        logger.debug("spawner() job queue is empty")
         # OBSOLETE
         # stop all consumer stuck waiting job from the queue if any
         # for consumer in consumer_tasks:
         #     consumer.cancel()
         #     logger.debug("jobs_spawner() %s stopped", consumer.get_name())
         jobs_done = await asyncio.gather(*consumer_tasks, return_exceptions=True)
-        logger.info("tasks_spawner() nb of jobs/retries by each worker %s", jobs_done)
+        logger.info("spawner() nb of jobs/retries by each worker %s", jobs_done)
 
     return result_df
 
@@ -426,7 +486,7 @@ def launcher(
     logger.info("launcher() starting asynchronous jobs")
     logger.info("launcher() launching all jobs (producer and consumers)")
     results_df = asyncio.run(
-        tasks_spawner(
+        spawner(
             df,
             parallel_workers=parallel_workers,
             task_factory=task_factory,
