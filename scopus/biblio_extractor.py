@@ -10,9 +10,9 @@ The general idea is to have TWO (disjoint) finite sets of keywordss, for example
 
 The program queries an online bibligraphical service such as <https://api.elsevier.com/content/search/scopus>
 to find out how many papers have these keywords.
-Note that, each paper may have many keywords from the two sets, possibly none (open world hypothesis).
+Note that, each paper may have many keywords from the two sets, possibly none (Open World Hypothesis, OWH).
 
-We want to analyse the dependencies between the two sets keywords using techniques like <https://en.wikipedia.org/wiki/Correspondence_analysis>
+We want to analyse the dependencies between the two sets keywords using techniques like Correspondence Analysis (CA)
 To do so, this program creates and fill specific kind of contingency table such as follows :
 
                 germination germination cytotoxicity    cytotoxicity
@@ -22,7 +22,7 @@ acridine    w/  X_11        Y_11        X_12            Y_12
 triterpene  w/o U_21        V_21        U_22            V_22
 triterpene  w/  X_21        Y_21        X_22            Y_22
 
-Where for each couple (kw_i, kw_j) in KW1xKW2, the submatrix [U,V][X,Y] is a kind of confusion matrix where:
+Where for each couple (kw_i, kw_j) in KW1xKW2, the **confusion submatrix** [U,V][X,Y] stores :
 
 - U = (False, False) is the number of papers that have NEITHER kw1 NOR kw2 as keywords
 - V = (False, True)  is the number of papers that have kw2 but NOT kw1 as keywords
@@ -90,45 +90,51 @@ DEFAULT_WORKER_DELAY = 1.0  # at most one req / sec
 DEFAULT_SAMPLES = None  # no sampling
 
 # Typing
-# a keyword is a fully index row or column identifier
+# a keyword is a fully index row (or column) identifier made of a class and the keyword itself
 Keyword = tuple[str, str]
 # an aliases for queries : KW1, KW2, POS_KW, NEG_KW, KIND
 # where KIND defines the combination among {w/o, w/}x{w/o, w/}
 # that is, a celle of the confusion matrix
 Query = tuple[list[Keyword], list[Keyword], list[Keyword], list[Keyword], tuple[bool, bool]]
 
-
+# TODO normalize alternatives as well in keywords
 def load_data(filename: str | Path):
-    """loads a CSV dataset as a dataframe"""
+    """loads a CSV dataset as a dataframe with two levels keywords"""
     # https://pandas.pydata.org/docs/reference/api/pandas.read_csv.html
+    # row/col dimension 0 is the class, row/col dimension 1 is the keyword
     df: pd.DataFrame = pd.read_csv(filename, index_col=[0, 1], header=[0, 1]).fillna(0)
-    logger.debug("dataset %s read", filename)
+    logger.debug("load_data(%s): input dataset read", filename)
 
     def normalize_names(expr: str):
-        """convenience tool"""
+        """convenience tool for normalizing strings"""
         return ALT_SEP.join(string.strip().lower() for string in expr.split(ALT_SEP))
 
     # normalize strings
     df.index = pd.MultiIndex.from_tuples([tuple(normalize_names(x) for x in t) for t in df.index])
     df.columns = pd.MultiIndex.from_tuples([tuple(normalize_names(x) for x in t) for t in df.columns])
 
-    logger.info("%i compounds (with %i classes)", len(df.index.levels[1]), len(df.index.levels[0]))
-    logger.info("%i activities (with %i classes)", len(df.columns.levels[1]), len(df.columns.levels[0]))
+    logger.info(
+        "load_data(%s): %i compounds (with %i classes)", filename, len(df.index.levels[1]), len(df.index.levels[0])
+    )
+    logger.info(
+        "load_data(%s): %i activities (with %i classes)", filename, len(df.columns.levels[1]), len(df.columns.levels[0])
+    )
 
     return df
 
 
 def extend_df(df: pd.DataFrame) -> pd.DataFrame:
-    """Add extra indexes as last level of rows and columns.
+    """Add extra indexes as last level of rows and columns to store the 2x2 confusion matrix
 
     Index and columns are multi-level indexes. We duplicate each key to have
     an extra [w/, w/o] index level at the finest level.
 
-    In the end, the orginal KW1 x KW2 matrix is transformed to a 4 x KW1 x KW2 one
-    each original celle [m] being now a 2x2 submatrix [U, V][X, Y]
+    In the end, the orginal KW1 x KW2 matrix is transformed to a KW1 x 2 x KW2 x 2
+    each original cell [m] being now a 2x2 confusion submatrix [U, V][X, Y]
 
     OBSOLETE : if margin are added, a  4 x (KW1 + 1) x (KW2 + 1) is constructed
     """
+    logger.debug("extend_df()")
     df2 = pd.DataFrame().reindex_like(df)
 
     # if with_margin:
@@ -150,8 +156,8 @@ def extend_df(df: pd.DataFrame) -> pd.DataFrame:
     return extended_df
 
 
-def clausal_query(query: Query) -> str:
-    """Build a logical clause of the following form:
+def build_clause(query: Query) -> str:
+    """Build a logical clause of the following form from the given query:
 
         (c_1 \/ ... \/ c_m)
      /\ (a_1 \/ ... \/ a_n)
@@ -161,10 +167,14 @@ def clausal_query(query: Query) -> str:
     Where the dataset has m compounds and n activities,
     len(pos_kw) = x and len(neg_kw) = y.
 
-    Keywords taht contain alternatives are normalized
+    Classe information are discarded from keywords.
+    Keywords that contain alternatives are normalized to conjunctions when in a positive position or to disjunctions when in the negative position.
+
+    See tests for more information.
     """
 
     def split_alts(string, operator="OR"):
+        """transform alternatives in keywords"""
         base = f" {operator} ".join(f'KEY("{name}")' for name in string.split(ALT_SEP))
         return f"({base})"
 
@@ -189,11 +199,14 @@ def clausal_query(query: Query) -> str:
     return clauses
 
 
+# %%
+
+
 async def fake_search(_, query: Query, *, delay=0):
-    """Fake query tool without network, for test purpose"""
+    """Fake query tool WITHOUT network, for test purpose"""
     await asyncio.sleep(delay)
     start_time = time.perf_counter()
-    clause = clausal_query(query)
+    clause = build_clause(query)
     logger.debug("fake_search(%s)", query[-3:])
     logger.debug("               %s", clause)
     results_nb = randint(1, 10000)
@@ -203,8 +216,7 @@ async def fake_search(_, query: Query, *, delay=0):
 
 
 async def httpbin_search(session, query: Query, *, delay=0, error_rate=10):
-    """Fake query tool WITH network on httpbin, for test purpose"""
-    # simule 1% d'erreur
+    """Fake query tool WITH network on httpbin, for test purpose. Simulates error rate (with http 429)"""
     if randint(1, 100) <= error_rate:
         url = "http://httpbin.org/status/429"
     else:
@@ -214,10 +226,9 @@ async def httpbin_search(session, query: Query, *, delay=0, error_rate=10):
     await asyncio.sleep(delay)
     start_time = time.perf_counter()
     logger.debug("httpbin_search(%s)", query[-3:])
-    json_query = wrap_scopus(clausal_query(query))
+    json_query = wrap_scopus(build_clause(query))
 
     try:
-        # async with aiohttp.ClientSession(raise_for_status=True) as session:
         async with session.get(url, params=json_query, data=data, ssl=SSL_CONTEXT) as resp:
             json = await resp.json()
             results_nb = int(json["form"]["answer"])
@@ -237,16 +248,15 @@ def wrap_scopus(string: str):
 
 
 async def scopus_search(session, query: Query, *, delay=0):
-    """SCOPUS query tool: return the number of article papers having two sets of keywords. Delay is in sec"""
+    """Scopus query tool: return the number of article papers having two sets of keywords. Delay is in sec"""
     scopus_url = "https://api.elsevier.com/content/search/scopus"
     results_nb = None
 
     await asyncio.sleep(delay)
     start_time = time.perf_counter()
     logger.debug("scopus_search(%s)", query[-3:])
-    json_query = wrap_scopus(clausal_query(query))
+    json_query = wrap_scopus(build_clause(query))
     try:
-        # async with aiohttp.ClientSession(raise_for_status=True) as session:
         async with session.get(scopus_url, params=json_query, headers=API_KEY, ssl=SSL_CONTEXT) as resp:
             logger.debug("X-RateLimit-Remaining=%s", resp.headers.get("X-RateLimit-Remaining", None))
             json = await resp.json()
@@ -265,7 +275,7 @@ DEFAULT_SEARCH_MODE = "fake"
 
 
 def generate_all_queries(data: pd.DataFrame, *, with_margin=False):
-    """Generate all values to fill the contengency table"""
+    """Generate all queries from a dataset."""
     # compounds = list(data.index.get_level_values(1))
     # activities = list(data.columns.get_level_values(1))
 
@@ -299,11 +309,12 @@ def generate_all_queries(data: pd.DataFrame, *, with_margin=False):
         yield (compounds, activities, [], [], (None, None))
 
 
-async def execute_job(session, queue, results_df, task_factory, *, worker_delay=1, name=None):
+async def consume_query(session, queue, results_df, task_factory, *, worker_delay=1, name=None):
     """A (parallel) consumer that send a query to scopus and then add result to a dataframe"""
     jobs_done = 0
     jobs_retried = 0
     try:
+        # queue must be filled first
         while not queue.empty():
             query = await queue.get()
             nb_results, duration = await task_factory(session, query, delay=0)
@@ -352,13 +363,15 @@ async def execute_job(session, queue, results_df, task_factory, *, worker_delay=
     except asyncio.CancelledError:
         logger.debug("execute_job() task %s received cancel, done %i jobs, retried %i", name, jobs_done, jobs_retried)
 
+    logger.debug("execute_job() task %s received cancel, done %i jobs, retried %i", name, jobs_done, jobs_retried)
+
     return jobs_done, jobs_retried
 
 
-async def jobs_spawner(df: pd.DataFrame, *, task_factory, with_margin, parallel_workers, worker_delay, samples):
+async def tasks_spawner(df: pd.DataFrame, *, task_factory, with_margin, parallel_workers, worker_delay, samples):
     """Create tasks in a queue which is emptied in parallele ensuring at most MAX_REQ_BY_SEC requests per second"""
     jobs_queue: asyncio.Queue = asyncio.Queue()
-    logger.info("jobs_spawner(): task_factory=%s, parallel_workers=%i", task_factory.__name__, parallel_workers)
+    logger.info("tasks_spawner(): task_factory=%s, parallel_workers=%i", task_factory.__name__, parallel_workers)
 
     # generate all queries put them into the queue
     all_queries = list(generate_all_queries(df, with_margin=with_margin))
@@ -366,12 +379,10 @@ async def jobs_spawner(df: pd.DataFrame, *, task_factory, with_margin, parallel_
         all_queries = sample(all_queries, samples)
     for query in all_queries:
         await jobs_queue.put(query)
-        logger.debug("jobs_spawner() added query=%s", query[-3:])
+        logger.debug("tasks_spawner() added query=%s", query[-3:])
 
-    logger.debug("jobs_spawner() added %i queries", len(all_queries))
+    logger.info("tasks_spawner() added %i queries to the queue", len(all_queries))
 
-    # MAX_REQ_BY_SEC consummers that run in parallel and that can fire at most
-    # one request per second
     consumer_tasks = []
     result_df = extend_df(df)
     async with aiohttp.ClientSession(raise_for_status=True) as session:
@@ -379,24 +390,24 @@ async def jobs_spawner(df: pd.DataFrame, *, task_factory, with_margin, parallel_
         # on lance tous les exécuteurs de requêtes
         consumer_tasks = [
             asyncio.create_task(
-                execute_job(session, jobs_queue, result_df, task_factory, worker_delay=worker_delay, name=i),
+                consume_query(session, jobs_queue, result_df, task_factory, worker_delay=worker_delay, name=i),
                 name=f"consumer-{i}",
             )
             for i in range(1, parallel_workers + 1)
         ]
 
-        logger.info("jobs_spawner() %i consumer tasks created", len(consumer_tasks))
+        logger.info("tasks_spawner() %i consumer tasks created", len(consumer_tasks))
 
         # on attend que tout soit traité, après que tout soit généré
         await jobs_queue.join()
-        logger.debug("jobs_spawner() job queue is empty")
+        logger.debug("tasks_spawner() job queue is empty")
         # OBSOLETE
         # stop all consumer stuck waiting job from the queue if any
         # for consumer in consumer_tasks:
         #     consumer.cancel()
         #     logger.debug("jobs_spawner() %s stopped", consumer.get_name())
         jobs_done = await asyncio.gather(*consumer_tasks, return_exceptions=True)
-        logger.info("jobs_spawner() nb of jobs done by each worker %s", jobs_done)
+        logger.info("tasks_spawner() nb of jobs/retries by each worker %s", jobs_done)
 
     return result_df
 
@@ -410,12 +421,12 @@ def launcher(
     worker_delay=DEFAULT_WORKER_DELAY,
     samples=None,
 ):
-    """Launch the batch of downloads: a simple wrapper around jobs_spawner"""
+    """Launch the batch of downloads: a simple (non async) wrapper around tasks_spawner"""
     launch_start_time = time.perf_counter()
     logger.info("launcher() starting asynchronous jobs")
     logger.info("launcher() launching all jobs (producer and consumers)")
     results_df = asyncio.run(
-        jobs_spawner(
+        tasks_spawner(
             df,
             parallel_workers=parallel_workers,
             task_factory=task_factory,
