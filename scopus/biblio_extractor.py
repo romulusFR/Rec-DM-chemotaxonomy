@@ -498,6 +498,13 @@ def launcher(
     total_time = time.perf_counter() - launch_start_time
     logger.info("launcher() all jobs done in %fs", total_time)
 
+    # order the index for performance, see
+    # https://stackoverflow.com/questions/54307300/what-causes-indexing-past-lexsort-depth-warning-in-pandas
+    # https://pandas.pydata.org/docs/reference/api/pandas.Index.is_monotonic_increasing.html
+    # https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.sort_index.html
+
+    results_df.sort_index(axis=1, inplace=True, ascending=[True, True, False])
+    results_df.sort_index(axis=0, inplace=True, ascending=[True, True, False])
     return results_df.astype("Int64")
 
 
