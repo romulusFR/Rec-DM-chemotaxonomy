@@ -78,7 +78,7 @@ def get_parser() -> argparse.ArgumentParser:
     return arg_parser
 
 
-if __name__ == "__main__":
+def main():
     parser = get_parser()
     args = parser.parse_args()
 
@@ -142,3 +142,7 @@ if __name__ == "__main__":
         output_filename = OUTPUT_DIR / f"{filename.stem}_{now}.csv"
         results.to_csv(output_filename)
         logger.info("results written to %s", output_filename)
+
+
+if __name__ == "__main__":
+    main()

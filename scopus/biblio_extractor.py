@@ -493,13 +493,14 @@ async def consumer(
                 # raise RuntimeWarning(f"consumer({consumer_id}) broken here ")
 
             await asyncio.sleep(max(worker_delay - duration, 0))
-    except asyncio.CancelledError:
-        logger.debug("consumer(%s) received cancel, done %i jobs, retried %i", consumer_id, jobs_done, jobs_retried)
+    except asyncio.CancelledError as cancel:
+        logger.error("consumer(%s) received cancel", consumer_id)
+        raise cancel
     # except Exception as err:
     #     logger.error("consumer(%s) crashed with exception %s('%s')", consumer_id, type(err).__name__, err)
     # raise err
 
-    logger.debug("consumer(%s) received cancel, done %i jobs, retried %i", consumer_id, jobs_done, jobs_retried)
+    logger.info("consumer(%s) ended, done %i jobs, retried %i", consumer_id, jobs_done, jobs_retried)
 
     return jobs_done, jobs_retried
 
@@ -542,9 +543,9 @@ async def spawner(
 
     observer_task = asyncio.create_task(
         observer(jobs_queue),
-        name=f"observer",
+        name="observer",
     )
-    logger.info("spawner() observer task created")
+    logger.info("spawner() observer (done=%s) task created", observer_task.done())
 
     consumer_tasks = []
     result_df = extend_df(df)
@@ -640,7 +641,7 @@ if __name__ == "__main__":
     # logger.debug("__main__ all activities %s", all_activities)
     # 383330 / 243964
     db = gen_db(all_compounds, all_activities, 243964 // 10, 383330 / 243964)
-    db.loc[("alkaloid", "acridine"), ("pharmaco", "cytotoxicity")]
+    # db.loc[("alkaloid", "acridine"), ("pharmaco", "cytotoxicity")]
 
     # NB_KW1 = 2
     # NB_KW2 = 2
