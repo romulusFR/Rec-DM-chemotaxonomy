@@ -43,21 +43,23 @@ Moreover each confusion matrix [U,V][X,Y] is such that U + V + X + Y  = |D|.
 # %%
 
 import asyncio
-from dataclasses import dataclass
 import logging
 import ssl
 import time
 from collections import defaultdict
+from dataclasses import dataclass
 from functools import partial, wraps
 from itertools import product
 from os import environ
 from pathlib import Path
+from pprint import pprint
 from random import randint, sample
-from typing import Callable, Iterator, Optional, Any, Awaitable, Protocol
+from typing import Any, Awaitable, Callable, Iterator, Optional, Protocol
 
-from aiohttp import ClientSession, ClientResponseError
 import certifi
+import numpy as np
 import pandas as pd
+from aiohttp import ClientResponseError, ClientSession
 from dotenv import load_dotenv
 
 # take environment variables from .env.
@@ -226,9 +228,6 @@ def build_clause(query: Query) -> str:
         clauses += f" AND NOT ({negative_clause})"
 
     return clauses
-
-
-# %%
 
 
 async def fake_search(_, query: Query, *, delay: float = 0.0) -> ResultAPI:
@@ -509,44 +508,83 @@ def launcher(
 
 
 # %%
+
+
+def gen_db(kws1: list[Keyword], kws2: list[Keyword], nb_papers: int, factor: float = 1.0):
+    """Generates a plausible database of nb_papers papers at least 1 keyword from each list"""
+    # the probability for the binomial law
+    success_probability = np.sqrt(factor) - 1
+
+    logger.debug("gen_db() with %i compounds, %i activities", len(kws1), len(kws1))
+    logger.debug("gen_db() generates %i papers with factor %f, p=%f", nb_papers, factor, success_probability)
+
+    # marginal sums
+    margin_rows: dict[Keyword, int] = defaultdict(int)
+    margin_cols: dict[Keyword, int] = defaultdict(int)
+
+    # the list of all pairs of keywords in the database
+    pairs: list[tuple[Keyword, Keyword]] = []
+    # for each paper pick a number of keywords in each list
+    # at random following a binomial law
+    nbs_1 = np.random.binomial(len(kws1), success_probability / len(kws1), nb_papers)
+    nbs_2 = np.random.binomial(len(kws2), success_probability / len(kws2), nb_papers)
+
+    # for each paper
+    for paper in range(nb_papers):
+        # standardize the number of keywords
+        nb_1 = min(1 + nbs_1[paper], len(kws1))
+        nb_2 = min(1 + nbs_2[paper], len(kws2))
+        # picks keywords at random and fill the margins
+        kws1_paper = sample(kws1, nb_1)
+        for kw_1 in kws1_paper:
+            margin_rows[kw_1] += 1
+        kws2_paper = sample(kws2, nb_2)
+        for kw_2 in kws2_paper:
+            margin_cols[kw_2] += 1
+        # compute all pairs of keywords and store them
+        pairs.extend(product(kws1_paper, kws2_paper))
+
+    logger.info("gen_db() generate %i pairs, factor is %.2f ~ %.2f (given)", len(pairs), len(pairs) / nb_papers, factor)
+
+    # unzip the pairs
+    s_compounds, s_activities = list(zip(*pairs))
+    # TODO : voir comment le faire avec pivot_table ?
+    # https://pandas.pydata.org/docs/reference/api/pandas.crosstab.html
+    # compute the number of papers having each pair of keywords
+    contingency = pd.crosstab(index=[s_compounds], columns=[s_activities])
+
+    # add an extra dimensions to rows and columns
+    rows = pd.MultiIndex.from_tuples((c, n, k) for (c, n), k in product(kws1, SELECTORS))
+    cols = pd.MultiIndex.from_tuples((c, n, k) for (c, n), k in product(kws2, SELECTORS))
+    # similary to extend_df
+    res = pd.DataFrame(index=rows, columns=cols)
+    # fill with already known data
+    res.iloc[res.index.get_level_values(2) == "w/", res.columns.get_level_values(2) == "w/"] = contingency
+
+    return res
+
+
 if __name__ == "__main__":
-    logger.setLevel(logging.INFO)
+    logger.setLevel(logging.DEBUG)
     logger.info("__main__ Scopus API key %s", API_KEY)
 
-    dataset = load_data(TEST_DATA)
-    all_compounds = list(dataset.index.get_level_values(1))
-    all_activities = list(dataset.columns.get_level_values(1))
-    logger.debug("__main__ all compounds %s", all_compounds)
-    logger.debug("__main__ all activities %s", all_activities)
+    dataset = load_data(SAMPLE_DATA)
+    # all_compounds = list(dataset.index.get_level_values(1))
+    # all_activities = list(dataset.columns.get_level_values(1))
+    all_compounds = list(dataset.index)
+    all_activities = list(dataset.columns)
+    # logger.debug("__main__ all compounds %s", all_compounds)
+    # logger.debug("__main__ all activities %s", all_activities)
+    # 383330 / 243964
+    # db = gen_db(all_compounds, all_activities, 243964 // 100, 383330 / 243964)
 
-    # task_factory = partial(httpbin_search, error_rate=50)
-    # task_factory.__name__ = httpbin_search.__name__
-    results = launcher(dataset)
-    print(results)
-    print(results.info())
+    NB_KW1 = 4
+    NB_KW2 = 5
 
-    # print(df.columns.get_level_values(1))
-    # print(cnf)
-    # print(wrap_scopus_query(cnf))
-
-    # res = asyncio.run(do_async(wrap_scopus_query(cnf)))
-    # print(res)
-
-    # all_queries = list(generate_all_queries(dataset, with_margin=True))
-    # # pprint(all_queries)
-    # logger.info("total number of queries: %i", len(all_queries))
-    # # print(res[0]["search-results"]["entry"][0])
-
-    # for a_query in all_queries:  # [-2:]
-    #     # logger.debug("query is %s", a_query[-2:])
-    #     # query_load = wrap_scopus(clausal_query(*query))
-    #     res = asyncio.run(do_async(a_query))
-    #     print(res)
-
-    # df.loc[("shs","sociology"), ("computer science", "web")] = 12
-
-    # %%
-    # results = extend_df(dataset)
-    # results.loc[("shs", "sociology"),("computer science", "web")]
-    # results.loc[("shs", "sociology", SELECTORS[0]),("computer science", "web", SELECTORS[0])] = 42
-    # results
+    db = gen_db([("C", f"c_{i+1}") for i in range(NB_KW1)], [("A", f"a_{j+1}") for j in range(NB_KW2)], 10, 2.0)
+    print(db)
+    # db.groupby(by=["compound", "activity"]).count()
+    # df = pd.DataFrame(db)
+    # results = launcher(dataset)
+    # print(results)
+    # print(results.info())
