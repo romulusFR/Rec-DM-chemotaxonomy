@@ -35,7 +35,7 @@ def get_parser() -> argparse.ArgumentParser:
         "-sm",
         action="store",
         default=bex.DEFAULT_SEARCH_MODE,
-        help=f"search mode: 'fake', 'httpbin' or 'scopus' (default '{bex.DEFAULT_SEARCH_MODE}')",
+        help=f"search mode: 'offline', 'fake', 'httpbin' or 'scopus' (default '{bex.DEFAULT_SEARCH_MODE}')",
     )
     arg_parser.add_argument(
         "--parallel",
@@ -111,24 +111,29 @@ if __name__ == "__main__":
     if args.search not in bex.SEARCH_MODES:
         raise ValueError(f"Unknown search mode {args.search}")
 
-    nb_queries = (
-        args.samples
-        if args.samples is not None
-        else 4 * len(all_compounds) * len(all_activities)
-        + (2 * len(all_compounds) + 2 * len(all_activities) + 1) * args.margins
-    )
-    print(
-        f"Launching {nb_queries} queries using {args.search} with {args.parallel} parallel workers (w/ min delay {args.delay})"
-    )
+    if args.search == "offline":
+        nb_papers = 243964 // (len(all_compounds) * len(all_activities))
+        results = bex.gen_db(list(dataset.index), list(dataset.columns), nb_papers , 383330 / 243964)
 
-    results = bex.launcher(
-        dataset,
-        task_factory=bex.SEARCH_MODES[args.search],
-        with_margin=args.margins,
-        parallel_workers=args.parallel,
-        worker_delay=args.delay,
-        samples=args.samples,
-    )
+    else:
+        nb_queries = (
+            args.samples
+            if args.samples is not None
+            else 4 * len(all_compounds) * len(all_activities)
+            + (2 * len(all_compounds) + 2 * len(all_activities) + 1) * args.margins
+        )
+        print(
+            f"Launching {nb_queries} queries using {args.search} with {args.parallel} parallel workers (w/ min delay {args.delay})"
+        )
+
+        results = bex.launcher(
+            dataset,
+            task_factory=bex.SEARCH_MODES[args.search],
+            with_margin=args.margins,
+            parallel_workers=args.parallel,
+            worker_delay=args.delay,
+            samples=args.samples,
+        )
 
     print(results)
 
