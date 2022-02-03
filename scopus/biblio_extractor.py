@@ -502,8 +502,10 @@ def launcher(
     # https://pandas.pydata.org/docs/reference/api/pandas.Index.is_monotonic_increasing.html
     # https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.sort_index.html
 
-    results_df.sort_index(axis=1, inplace=True, ascending=[True, True, False])
-    results_df.sort_index(axis=0, inplace=True, ascending=[True, True, False])
+    # ascending, ascending, descending
+    sort_order = [True, True, False]
+    results_df.sort_index(axis=1, inplace=True, ascending=sort_order)
+    results_df.sort_index(axis=0, inplace=True, ascending=sort_order)
     return results_df.astype("Int64")
 
 
@@ -512,6 +514,7 @@ def launcher(
 
 def gen_db(kws1: list[Keyword], kws2: list[Keyword], nb_papers: int, factor: float = 1.0):
     """Generates a plausible database of nb_papers papers at least 1 keyword from each list"""
+    start_time = time.perf_counter()
     # the probability for the binomial law
     success_probability = np.sqrt(factor) - 1
 
@@ -526,26 +529,33 @@ def gen_db(kws1: list[Keyword], kws2: list[Keyword], nb_papers: int, factor: flo
     pairs: list[tuple[Keyword, Keyword]] = []
     # for each paper pick a number of keywords in each list
     # at random following a binomial law
-    nbs_1 = np.random.binomial(len(kws1), success_probability / len(kws1), nb_papers)
-    nbs_2 = np.random.binomial(len(kws2), success_probability / len(kws2), nb_papers)
+    nbs1 = np.random.binomial(len(kws1), success_probability / len(kws1), nb_papers)
+    nbs2 = np.random.binomial(len(kws2), success_probability / len(kws2), nb_papers)
 
     # for each paper
     for paper in range(nb_papers):
         # standardize the number of keywords
-        nb_1 = min(1 + nbs_1[paper], len(kws1))
-        nb_2 = min(1 + nbs_2[paper], len(kws2))
+        nb1 = min(1 + nbs1[paper], len(kws1))
+        nb2 = min(1 + nbs2[paper], len(kws2))
         # picks keywords at random and fill the margins
-        kws1_paper = sample(kws1, nb_1)
-        for kw_1 in kws1_paper:
-            margin_rows[kw_1] += 1
-        kws2_paper = sample(kws2, nb_2)
-        for kw_2 in kws2_paper:
-            margin_cols[kw_2] += 1
+        kws1_paper = sample(kws1, nb1)
+        for kw1 in kws1_paper:
+            margin_rows[kw1] += 1
+        kws2_paper = sample(kws2, nb2)
+        for kw2 in kws2_paper:
+            margin_cols[kw2] += 1
         # compute all pairs of keywords and store them
         pairs.extend(product(kws1_paper, kws2_paper))
 
-    logger.info("gen_db() generate %i pairs, factor is %.2f ~ %.2f (given)", len(pairs), len(pairs) / nb_papers, factor)
+    logger.info(
+        "gen_db() generates %i pairs, factor is %.2f ~ %.2f (given)", len(pairs), len(pairs) / nb_papers, factor
+    )
 
+    logger.debug("gen_db() margin_rows=%s", margin_rows)
+    logger.debug("gen_db() margin_cols=%s", margin_cols)
+    
+
+    # BUG : may have a bug if some row or line is 0 everywhere
     # unzip the pairs
     s_compounds, s_activities = list(zip(*pairs))
     # TODO : voir comment le faire avec pivot_table ?
@@ -556,16 +566,28 @@ def gen_db(kws1: list[Keyword], kws2: list[Keyword], nb_papers: int, factor: flo
     # add an extra dimensions to rows and columns
     rows = pd.MultiIndex.from_tuples((c, n, k) for (c, n), k in product(kws1, SELECTORS))
     cols = pd.MultiIndex.from_tuples((c, n, k) for (c, n), k in product(kws2, SELECTORS))
+
     # similary to extend_df
     res = pd.DataFrame(index=rows, columns=cols)
     # fill with already known data
     res.iloc[res.index.get_level_values(2) == "w/", res.columns.get_level_values(2) == "w/"] = contingency
+    # now, compute the missing cells of confusion submatrixes
+    for kw1 in kws1:
+        for kw2 in kws2:
+            # logger.debug("res.loc[%s][%s]=%s", kw1, kw2, res.loc[kw1, kw2])
+            # /!\ arr is A REFERENCE to the confusion submatrix
+            arr = res.loc[kw1, kw2].values
+            arr[1][0] = margin_rows[kw1] - arr[1][1]
+            arr[0][1] = margin_cols[kw2] - arr[1][1]
+            arr[0][0] = nb_papers - arr[0][1] - arr[1][0] - arr[1][1]
 
+    elapsed = time.perf_counter() - start_time
+    logger.info("gen_db() generated in %.4f sec", elapsed)
     return res
 
 
 if __name__ == "__main__":
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(logging.INFO)
     logger.info("__main__ Scopus API key %s", API_KEY)
 
     dataset = load_data(SAMPLE_DATA)
@@ -576,13 +598,13 @@ if __name__ == "__main__":
     # logger.debug("__main__ all compounds %s", all_compounds)
     # logger.debug("__main__ all activities %s", all_activities)
     # 383330 / 243964
-    # db = gen_db(all_compounds, all_activities, 243964 // 100, 383330 / 243964)
+    db = gen_db(all_compounds, all_activities, 243964//1, 383330 / 243964)
 
-    NB_KW1 = 4
-    NB_KW2 = 5
+    # NB_KW1 = 2
+    # NB_KW2 = 2
 
-    db = gen_db([("C", f"c_{i+1}") for i in range(NB_KW1)], [("A", f"a_{j+1}") for j in range(NB_KW2)], 10, 2.0)
-    print(db)
+    # db = gen_db([("C", f"c_{i+1}") for i in range(NB_KW1)], [("A", f"a_{j+1}") for j in range(NB_KW2)], 10, 2.0)
+    # print(db)
     # db.groupby(by=["compound", "activity"]).count()
     # df = pd.DataFrame(db)
     # results = launcher(dataset)
