@@ -555,6 +555,9 @@ def gen_db(kws1: list[Keyword], kws2: list[Keyword], nb_papers: int, factor: flo
     logger.debug("gen_db() margin_cols=%s", margin_cols)
     
 
+    elapsed = time.perf_counter() - start_time
+    logger.info("gen_db() generated papers in %.4f sec", elapsed)
+
     # BUG : may have a bug if some row or line is 0 everywhere
     # unzip the pairs
     s_compounds, s_activities = list(zip(*pairs))
@@ -582,7 +585,7 @@ def gen_db(kws1: list[Keyword], kws2: list[Keyword], nb_papers: int, factor: flo
             arr[0][0] = nb_papers - arr[0][1] - arr[1][0] - arr[1][1]
 
     elapsed = time.perf_counter() - start_time
-    logger.info("gen_db() generated in %.4f sec", elapsed)
+    logger.info("gen_db() generated whole db in %.4f sec", elapsed)
     return res
 
 
@@ -598,7 +601,7 @@ if __name__ == "__main__":
     # logger.debug("__main__ all compounds %s", all_compounds)
     # logger.debug("__main__ all activities %s", all_activities)
     # 383330 / 243964
-    db = gen_db(all_compounds, all_activities, 243964//1, 383330 / 243964)
+    db = gen_db(all_compounds, all_activities, 243964//10, 383330 / 243964)
 
     # NB_KW1 = 2
     # NB_KW2 = 2
