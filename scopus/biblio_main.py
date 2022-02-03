@@ -113,7 +113,7 @@ if __name__ == "__main__":
 
     if args.search == "offline":
         nb_papers = 243964 // (len(all_compounds) * len(all_activities))
-        results = bex.gen_db(list(dataset.index), list(dataset.columns), nb_papers , 383330 / 243964)
+        results = bex.gen_db(list(dataset.index), list(dataset.columns), nb_papers, 383330 / 243964)
 
     else:
         nb_queries = (

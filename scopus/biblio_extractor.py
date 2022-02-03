@@ -311,9 +311,9 @@ def gen_db(kws1: list[Keyword], kws2: list[Keyword], nb_papers: int, factor: flo
     return res
 
 
-async def offline_search(session: ClientSession, query: Query, *, delay: float = 0.0) -> ResultAPI:
+async def broken_search(session: ClientSession, query: Query, *, delay: float = 0.0) -> ResultAPI:
     """Dummy function for tests and error reporting"""
-    raise NotImplementedError("Do not call offline_search(), use gen_db()")
+    raise NotImplementedError("Do not call broken_search(), use gen_db() if needed")
 
 
 async def fake_search(_: ClientSession, query: Query, *, delay: float = 0.0) -> ResultAPI:
@@ -386,7 +386,13 @@ async def scopus_search(session: ClientSession, query: Query, *, delay=0):
 
 
 # query modes : one fake, one fake over network, one true
-SEARCH_MODES = {"scopus": scopus_search, "httpbin": httpbin_search, "fake": fake_search, "offline": offline_search}
+SEARCH_MODES = {
+    "scopus": scopus_search,
+    "httpbin": httpbin_search,
+    "fake": fake_search,
+    "offline": broken_search,
+    "broken": broken_search,
+}
 DEFAULT_SEARCH_MODE = "fake"
 
 
@@ -484,27 +490,31 @@ async def consumer(
                 await queue.put(query)
                 jobs_retried += 1
                 logger.info("consumer(%s) added back %s to the queue", consumer_id, query.short())
+                # raise RuntimeWarning(f"consumer({consumer_id}) broken here ")
 
             await asyncio.sleep(max(worker_delay - duration, 0))
     except asyncio.CancelledError:
         logger.debug("consumer(%s) received cancel, done %i jobs, retried %i", consumer_id, jobs_done, jobs_retried)
+    # except Exception as err:
+    #     logger.error("consumer(%s) crashed with exception %s('%s')", consumer_id, type(err).__name__, err)
+    # raise err
 
     logger.debug("consumer(%s) received cancel, done %i jobs, retried %i", consumer_id, jobs_done, jobs_retried)
 
     return jobs_done, jobs_retried
 
 
-async def observer(queue: asyncio.Queue, frequence: float = 0.5):
+async def observer(queue: asyncio.Queue, frequency: float = 0.5):
     """Observer task that reports the current state of the queue"""
-    delay = 1 / frequence
+    delay = 1 / frequency
     observations = 0
     try:
-        while True:
+        while True:  # not queue.empty():
             print(f">{queue.qsize():>4} jobs in the queue @{datetime.now().strftime('%H-%M-%S.%f')}")
             observations += 1
             await asyncio.sleep(delay)
     except asyncio.CancelledError:
-        logger.debug("observer() made %i observations", observations)
+        logger.info("observer() canceled after %i observations", observations)
 
 
 async def spawner(
@@ -549,22 +559,32 @@ async def spawner(
             for i in range(1, parallel_workers + 1)
         ]
 
+        logger.debug("spawner(): running tasks %s", asyncio.all_tasks())
         logger.info("spawner() %i consumer tasks created", len(consumer_tasks))
 
-        # on attend que tout soit traité, après que tout soit généré
-        await jobs_queue.join()
-        logger.debug("spawner() job queue is empty")
-        # OBSOLETE
+        # NOTE : spawner cannot end if all workers are dead!
+        # NOTE waiting for BOTH jobs_queue.join() here and queue.empty() in spawner
+        # is too much and may wait forever if all workers crashed
+        # await jobs_queue.join()
+        # logger.debug("spawner() job queue is empty")
+
+        # NOTE : OBSOLETE, do not need to cancel workers, just wait for them
         # stop all consumer stuck waiting job from the queue if any
         # for consumer in consumer_tasks:
         #     consumer.cancel()
         #     logger.debug("jobs_spawner() %s stopped", consumer.get_name())
-        jobs_done = await asyncio.gather(*consumer_tasks, return_exceptions=True)
-        # logger.info("spawner() nb of jobs/retries by each worker %s", jobs_done)
-        logger.info("spawner() nb of jobs/retries by each worker %s", jobs_done)
-        nb_jobs, nb_retries = zip(*jobs_done)
-        print(f"Summary: {len(consumer_tasks)} workers executed {sum(nb_jobs)} jobs with {sum(nb_retries)} retries on error.")
-        
+
+        finished_tasks = await asyncio.gather(*consumer_tasks, return_exceptions=True)
+        logger.info("spawner() nb of jobs/retries by each worker %s", finished_tasks)
+        errors = [res for res in finished_tasks if isinstance(res, Exception)]
+        done_jobs = [res for res in finished_tasks if not isinstance(res, Exception)]
+        logging.debug("spawner() %i errors from workers: %s", len(errors), errors)
+        if not done_jobs:
+            raise RuntimeError("No async worker ended properly")
+        nb_jobs, nb_retries = zip(*done_jobs)
+        print(
+            f"Summary: {len(consumer_tasks)} workers ended correctly {sum(nb_jobs)} jobs with {sum(nb_retries)} retries on error. {len(errors)} workers crashed."
+        )
 
     return result_df
 
