@@ -98,9 +98,7 @@ DEFAULT_SAMPLES = None  # no sampling
 # a keyword is a fully index row (or column) identifier made of a class and the keyword itself
 Keyword = tuple[str, str]
 
-# BUG : corriger le PB des tasks qui crashent en cours de route
 
-# TODO : voir si besoin https://stackoverflow.com/questions/54785148/destructuring-dicts-and-objects-in-python
 @dataclass(frozen=True)
 class Query:
     """an aliases for queries : KW1, KW2, POS_KW, NEG_KW, KIND
@@ -130,7 +128,6 @@ class SearchAPI(Protocol):  # pylint: disable=too-few-public-methods
         pass
 
 
-# TODO normalize alternatives as well in keywords
 def load_data(filename: str | Path) -> pd.DataFrame:
     """loads a CSV dataset as a dataframe with two levels keywords"""
     # https://pandas.pydata.org/docs/reference/api/pandas.read_csv.html
@@ -234,6 +231,7 @@ def build_clause(query: Query) -> str:
 
 
 def gen_db(kws1: list[Keyword], kws2: list[Keyword], nb_papers: int, factor: float = 1.0):
+    # pylint: disable=too-many-locals
     """Generates a plausible database of nb_papers papers at least 1 keyword from each list"""
     start_time = time.perf_counter()
     # the probability for the binomial law
@@ -440,6 +438,7 @@ async def consumer(
     worker_delay: float = 1.0,
     consumer_id: Optional[Any] = None,
 ):
+    # pylint: disable=too-many-branches
     """A (parallel) consumer that send a query to scopus and then add result to a dataframe"""
     jobs_done = 0
     jobs_retried = 0
@@ -527,6 +526,7 @@ async def spawner(
     worker_delay: float,
     samples: Optional[int],
 ):
+    # pylint: disable=too-many-locals
     """Create tasks in a queue which is emptied in parallele ensuring at most MAX_REQ_BY_SEC requests per second"""
     jobs_queue: asyncio.Queue = asyncio.Queue()
     logger.info("spawner(): task_factory=%s, parallel_workers=%i", task_factory.__name__, parallel_workers)
@@ -583,9 +583,9 @@ async def spawner(
         if not done_jobs:
             raise RuntimeError("No async worker ended properly")
         nb_jobs, nb_retries = zip(*done_jobs)
-        print(
-            f"Summary: {len(consumer_tasks)} workers ended correctly {sum(nb_jobs)} jobs with {sum(nb_retries)} retries on error. {len(errors)} workers crashed."
-        )
+        print(f"Summary: {len(consumer_tasks)} workers ended correctly.")
+
+        print(f"{sum(nb_jobs)} jobs with {sum(nb_retries)} retries on error. {len(errors)} workers crashed.")
 
     return result_df
 

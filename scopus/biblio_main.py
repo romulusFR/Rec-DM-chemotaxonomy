@@ -79,17 +79,18 @@ def get_parser() -> argparse.ArgumentParser:
 
 
 def main():
+    """entry point"""
     parser = get_parser()
     args = parser.parse_args()
 
     # https://docs.python.org/3/library/logging.html#levels
     if args.verbose >= 2:
-        LEVEL = logging.DEBUG
+        debug_level = logging.DEBUG
     elif args.verbose == 1:
-        LEVEL = logging.INFO
+        debug_level = logging.INFO
     else:
-        LEVEL = logging.WARNING
-    logger.setLevel(LEVEL)
+        debug_level = logging.WARNING
+    logger.setLevel(debug_level)
 
     print(f"Scopus downloader started (debug={logger.getEffectiveLevel()})")
     logger.debug(pformat(vars(args)))
