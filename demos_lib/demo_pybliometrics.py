@@ -6,7 +6,7 @@ import pandas as pd
 # %%
 
 
-compound = "pyrrolizidine"  # alkaloid
+compound = "polyene"  # alkaloid
 activity = "antifungal"  # pharmaco
 key = "KEY"
 # 16 downloaded on 2022-01-29
