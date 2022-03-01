@@ -1,8 +1,8 @@
 ,,Lagoon,Lagoon,Pit,Pit,Drainage,Drainage,Tank,Tank
-,,w/o,w/,w/o,w/,w/o,w/,w/o,w/
-Nitrogen,w/o,123,116,175,64,156,83,228,11
-Nitrogen,w/,13,27,24,16,38,2,38,2
-Phosphorus,w/o,128,121,181,68,165,84,237,12
-Phosphorus,w/,8,22,18,12,29,1,29,1
-Salt,w/o,134,124,184,74,174,84,245,13
-Salt,w/,2,19,15,6,20,1,21,0
+,,w/,w/o,w/,w/o,w/,w/o,w/,w/o
+Nitrogen,w/,27,13,16,24,2,38,2,38
+Nitrogen,w/o,116,123,64,175,83,156,11,228
+Phosphorus,w/,22,8,12,18,1,29,1,29
+Phosphorus,w/o,121,128,68,181,84,165,12,237
+Salt,w/,19,2,6,15,1,20,0,21
+Salt,w/o,124,134,74,184,84,174,13,245
