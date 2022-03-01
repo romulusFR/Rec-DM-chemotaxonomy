@@ -6,6 +6,9 @@ from itertools import product
 
 import numpy as np
 import pandas as pd
+import prince
+import matplotlib.pyplot as plt
+
 
 BOOLS = [False, True]
 SELECTORS = ["w/o", "w/"]  # ordered as bools
@@ -145,3 +148,31 @@ expected_odds = pd.DataFrame(matrix, index=wastes, columns=storages)
 
 # %%
 (100 * observed_odds / expected_odds).round()
+
+# %%
+
+chi_square = (observed_odds - expected_odds) ** 2 / expected_odds
+# %%
+
+ca = prince.CA(
+    n_components=2,
+    copy=True,
+    check_input=True,
+    engine="auto",
+    random_state=42,
+)
+ca = ca.fit(chi_square)
+
+# %%
+
+ax = ca.plot_coordinates(
+    X=chi_square,
+    ax=None,
+    figsize=(6, 6),
+    x_component=0,
+    y_component=1,
+    show_row_labels=True,
+    show_col_labels=True
+)
+plt.show()
+
