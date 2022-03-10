@@ -1,16 +1,19 @@
 # %%
 
 # from itertools import combinations
-from math import factorial, prod
+from math import factorial, log, prod
 import numpy as np
-from scipy.stats import multinomial
+import scipy.stats as st
+from statistics import mean
+import statsmodels.api as sm
 
+print(sys.float_info)
 
 # https://scipy.github.io/devdocs/reference/generated/scipy.stats.multinomial.html?highlight=multinomial#scipy.stats.multinomial
 
 N = 12
 p = np.array([20, 15, 65]) / 100
-rv = multinomial(N, p)
+rv = st.multinomial(N, p)
 rv.mean()
 
 
@@ -72,7 +75,7 @@ print(rv.pmf(ex2))
 # /!\ en fait une binomiale : B = 1 , H | O = 0
 # ex3 = [0, None, None] or [1, None, None]
 p2 = np.array([p[0], sum(p[1:])])
-bv = multinomial(N, p2)
+bv = st.multinomial(N, p2)
 print(bv.pmf([1, N - 1]) + bv.pmf([0, N - 0]))
 
 # %%
@@ -89,3 +92,31 @@ cov_ref = N * np.array(
 )
 assert np.all(np.isclose(cov, cov_ref))
 # %%
+
+
+# goodness of fit
+# https://online.stat.psu.edu/stat504/lesson/2/2.4
+
+dice_obs = [3, 7, 5, 10, 2, 3]
+dice_exp = [sum(dice_obs) // 6] * 6
+
+
+chi_scipy = st.chisquare(dice_obs, dice_exp, ddof=0)
+print(chi_scipy)
+chi_manual = (c := sum((o - e) ** 2 / e for o, e in zip(dice_obs, dice_exp))),  1 - st.chi2.cdf(c, 5)
+print(chi_manual)
+
+print( chi_manual[1] - chi_scipy[1])
+
+# https://en.wikipedia.org/wiki/G-test
+# https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.power_divergence.html
+print(st.power_divergence(dice_obs, dice_exp, ddof=0, lambda_="log-likelihood"))
+dev_manual = 2 * sum(o * log(o / e) for o, e in zip(dice_obs, dice_exp))
+print(dev_manual, 1 - st.chi2.cdf(dev_manual, 5))
+# %%
+
+# divations/residuals
+print([(o-e) / (e ** 0.5) for o, e in zip(dice_obs, dice_exp)])
+
+
+# st.chi2_contingency(np.array([dice_obs,dice_exp]), correction=False)???
