@@ -112,29 +112,28 @@ def main():
     if args.search not in bex.SEARCH_MODES:
         raise ValueError(f"Unknown search mode {args.search}")
 
-    if args.search == "offline":
-        nb_papers = 243964 // (len(all_compounds) * len(all_activities))
-        results = bex.gen_db(list(dataset.index), list(dataset.columns), nb_papers, 383330 / 243964)
+    # if args.search == "offline":
+    #     nb_papers = 243964 // (len(all_compounds) * len(all_activities))
+    #     results = bex.gen_db(list(dataset.index), list(dataset.columns), nb_papers, 383330 / 243964)
+    # else:
+    nb_queries = (
+        args.samples
+        if args.samples is not None
+        else 4 * len(all_compounds) * len(all_activities)
+        + (2 * len(all_compounds) + 2 * len(all_activities) + 1) * args.margins
+    )
+    print(
+        f"Launching {nb_queries} queries using {args.search} with {args.parallel} parallel workers (w/ min delay {args.delay})"
+    )
 
-    else:
-        nb_queries = (
-            args.samples
-            if args.samples is not None
-            else 4 * len(all_compounds) * len(all_activities)
-            + (2 * len(all_compounds) + 2 * len(all_activities) + 1) * args.margins
-        )
-        print(
-            f"Launching {nb_queries} queries using {args.search} with {args.parallel} parallel workers (w/ min delay {args.delay})"
-        )
-
-        results = bex.launcher(
-            dataset,
-            task_factory=bex.SEARCH_MODES[args.search],
-            with_margin=args.margins,
-            parallel_workers=args.parallel,
-            worker_delay=args.delay,
-            samples=args.samples,
-        )
+    results = bex.launcher(
+        dataset,
+        task_factory=bex.SEARCH_MODES[args.search],
+        with_margin=args.margins,
+        parallel_workers=args.parallel,
+        worker_delay=args.delay,
+        samples=args.samples,
+    )
 
     print(results)
 
