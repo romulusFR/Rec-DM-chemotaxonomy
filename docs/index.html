@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="https://cdn.simplecss.org/simple.min.css" />
+    <link rel="stylesheet" href="index.css" />
+    <link
+      href="data:image/x-icon;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQEAYAAABPYyMiAAAABmJLR0T///////8JWPfcAAAACXBIWXMAAABIAAAASABGyWs+AAAAF0lEQVRIx2NgGAWjYBSMglEwCkbBSAcACBAAAeaR9cIAAAAASUVORK5CYII="
+      rel="icon"
+      type="image/x-icon"
+    />
+    <title>Chart</title>
+    <style>
+      .error {
+        color: red;
+      }
+    </style>
+    <script defer type="text/javascript" src="https://cdn.jsdelivr.net/npm//vega@5"></script>
+    <script defer type="text/javascript" src="https://cdn.jsdelivr.net/npm//vega-lite@4.17.0"></script>
+    <script defer type="text/javascript" src="https://cdn.jsdelivr.net/npm//vega-embed@6"></script>
+    <script defer src="index.js"></script>
+  </head>
+  <body>
+    <header>
+      <nav>
+        <a href="/">Home</a>
+        <a
+          target="_blank"
+          href="https://nbviewer.org/github/unc-informatique/pharmaco-chemistry-biblio/blob/main/analysis.ipynb"
+          >Docs</a
+        >
+        <a target="_blank" href="https://github.com/unc-informatique/pharmaco-chemistry-biblio">Github</a>
+      </nav>
+      <h1 style="color: white">Visualisation of Pharmaco Chemistry</h1>
+    </header>
+    <main style="margin-top: 30px">
+      <ul id="content-chart"></ul>
+    </main>
+  </body>
+</html>
