@@ -6,7 +6,7 @@ const jsonName = ["vbar.json", "mark.json", "sankey_template.json"];
  */
 function addToSelect(){
     jsonName.forEach(function(name) {
-        addChart(name, "/json_chart/" + name);
+        addChart(name, "json_chart/" + name);
     });
 }
 
