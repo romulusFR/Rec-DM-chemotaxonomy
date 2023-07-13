@@ -9,7 +9,7 @@ from pprint import pformat
 import biblio_extractor as bex
 
 logging.basicConfig()
-logger = logging.getLogger("CHEMOTAXO")
+logger = logging.getLogger("SCOPUS")
 
 # Output
 OUTPUT_DIR = Path("results")
